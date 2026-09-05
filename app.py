@@ -3,7 +3,7 @@ import os
 import streamlit as st
 from datetime import datetime
 
-# ডেটাবেজ ও এডমিন কনফিগারেশন
+# ডেটাবেজ ও এডমিন সেটআপ
 DB_FILE = "database.json"
 ADMIN_USER = "admin"
 ADMIN_PASS = "somity2026"
@@ -31,7 +31,7 @@ data = load_data()
 if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
 
-# ১. লগইন পেজ প্রসেস
+# ১. লগইন স্ক্রিন প্রসেস
 if not st.session_state.logged_in:
     st.markdown("<h1 style='text-align: center; color: #1E3A8A;'>🏦 আমার কিস্তি</h1>", unsafe_allow_html=True)
     with st.form("login_form"):
@@ -44,8 +44,8 @@ if not st.session_state.logged_in:
             else:
                 st.error("❌ ভুল পাসওয়ার্ড!")
 
-# ২. মূল ড্যাশবোর্ড প্রসেস (লগইন সফল হলে এটি চালু হবে)
-elif st.session_state.logged_in:
+# ২. মূল অ্যাপ স্ক্রিন প্রসেস (লগইন সফল হলে এটি চলবে)
+if st.session_state.logged_in:
     st.sidebar.title("🎛️  কন্ট্রোল প্যানেল")
     if st.sidebar.button("🔒  নিরাপদ লগআউট", type="primary"):
         st.session_state.logged_in = False
@@ -68,12 +68,13 @@ elif st.session_state.logged_in:
         st.subheader("📊 ড্যাশবোর্ড ও সদস্য তালিকা")
         if not data["members"]:
             st.info("বর্তমানে কোনো সদস্য নিবন্ধিত নেই।")
-        for phone, info in data["members"].items():
-            total_loan = round(info.get("loan_principal", 0.0) + info.get("loan_interest", 0.0), 2)
-            st.info(f"👤 **নাম:** {info['name']} | 📱 **মোবাইল:** {phone} | 💰 **মোট সঞ্চয়:** {info.get('savings', 0.0)} টাকা | 📉 **অবशिष्ट ঋণ:** {total_loan} টাকা ({info.get('loan_type', 'নাই')})")
+        else:
+            for phone, info in data["members"].items():
+                total_loan = round(info.get("loan_principal", 0.0) + info.get("loan_interest", 0.0), 2)
+                st.info(f"👤 **নাম:** {info['name']} | 📱 **মোবাইল:** {phone} | 💰 **মোট সঞ্চয়:** {info.get('savings', 0.0)} টাকা | 📉 **অবशिष्ट ঋণ:** {total_loan} টাকা ({info.get('loan_type', 'নাই')})")
 
     # পৃষ্ঠা ২: নতুন সদস্য যুক্ত করুন
-    elif choice == "নতুন সদস্য যুক্ত করুন":
+    if choice == "নতুন সদস্য যুক্ত করুন":
         st.subheader("➕ নতুন সদস্যের প্রোফাইল তৈরি করুন")
         phone = st.text_input("📱 সদস্যের মোবাইল নম্বর দিন")
         name = st.text_input("✍️ সদস্যের পুরো নাম লিখুন")
@@ -98,7 +99,7 @@ elif st.session_state.logged_in:
                 st.warning("দয়া করে নাম এবং মোবাইল নম্বর দিন।")
 
     # পৃষ্ঠা ৩: কিস্তি বা টাকা জমা নিন
-    elif choice == "কিস্তি বা টাকা জমা নিন":
+    if choice == "কিস্তি বা টাকা জমা নিন":
         st.subheader("💰 সদস্যের কিস্তি বা সঞ্চয়ের টাকা জমা নিন")
         if not data["members"]:
             st.warning("কোনো সদস্য নেই।")
@@ -116,7 +117,7 @@ elif st.session_state.logged_in:
                     st.rerun()
 
     # পৃষ্ঠা ৪: ঋণ বা লোন বিতরণ (Loan)
-    elif choice == "ঋণ বা লোন বিতরণ (Loan)":
+    if choice == "ঋণ বা লোন বিতরণ (Loan)":
         st.subheader("💸 সদস্যকে নতুন ঋণ বা লোন প্রদান করুন")
         if not data["members"]:
             st.warning("কোনো সদস্য নেই।")
@@ -135,7 +136,7 @@ elif st.session_state.logged_in:
                 loan_type = st.selectbox("📅 কিস্তির ধরন", ["দিনের হিসাবে", "সাপ্তাহিক হিসাবে", "মাসিক হিসাবে"])
                 duration = st.number_input("⏱️ মেয়াদ বা কিস্তির সংখ্যা", min_value=1, step=1, value=10)
                 
-                factor = duration / 12 if loan_type == "মাসিক হিসাবে" else duration / 52 if loan_type == "সাপ্তាកিক হিসাবে" else duration / 365
+                factor = duration / 12 if loan_type == "মাসিক হিসাবে" else duration / 52 if loan_type == "সাপ্তাহিক হিসাবে" else duration / 365
                 total_interest = loan_amount * (interest_rate / 100) * factor
                 
                 st.warning(f"📉 আসল: {loan_amount} টাকা | আনুমানিক মোট সুদ: {round(total_interest, 2)} টাকা")
@@ -153,7 +154,7 @@ elif st.session_state.logged_in:
                         st.rerun()
 
     # পৃষ্ঠা ৫: ঋণের টাকা বা কিস্তি আদায়
-    elif choice == "ঋণের টাকা বা কিস্তি আদায়":
+    if choice == "ঋণের টাকা বা কিস্তি আদায়":
         st.subheader("📉 ঋণের টাকা বা কিস্তি আদায় করুন")
         if not data["members"]:
             st.warning("কোনো সদস্য নেই।")
