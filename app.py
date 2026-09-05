@@ -64,134 +64,129 @@ def apply_css():
             margin: 2px 0;
         }
 
-        /* Login */
+        /* Compact Login */
         .login-shell {
-            min-height: 650px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            padding: 18px;
+            max-width: 1120px;
+            margin: 20px auto 0;
         }
 
         .brand-panel {
-            min-height: 620px;
-            border-radius: 30px;
-            padding: 50px 42px;
+            min-height: 0;
+            border-radius: 24px;
+            padding: 34px 30px;
             background:
-                radial-gradient(circle at 18% 20%, rgba(255,255,255,.75), transparent 22%),
-                linear-gradient(145deg, #edf9ed 0%, #d8f0d8 52%, #bfe4bd 100%);
+                radial-gradient(circle at 18% 15%, rgba(255,255,255,.8), transparent 24%),
+                linear-gradient(145deg, #edf9ed 0%, #d8f0d8 55%, #c5e8c3 100%);
             border: 1px solid #d6ebd5;
-            box-shadow: 0 20px 60px rgba(35,100,43,.10);
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
+            box-shadow: 0 14px 38px rgba(35,100,43,.09);
             text-align: center;
             overflow: hidden;
         }
 
         .brand-icon {
-            width: 92px;
-            height: 92px;
-            margin: 0 auto 20px auto;
+            width: 72px;
+            height: 72px;
+            margin: 0 auto 12px;
             border-radius: 50%;
             background: white;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 48px;
-            box-shadow: 0 8px 25px rgba(39,102,45,.14);
-            border: 6px solid rgba(255,255,255,.65);
+            font-size: 38px;
+            box-shadow: 0 6px 20px rgba(39,102,45,.12);
+            border: 4px solid rgba(255,255,255,.7);
         }
 
         .brand-title {
-            font-size: clamp(42px, 5vw, 72px);
+            font-size: clamp(38px, 4vw, 58px);
             font-weight: 900;
             color: #17652b;
-            line-height: 1.15;
-            margin-bottom: 12px;
+            line-height: 1.1;
+            margin-bottom: 8px;
         }
 
         .brand-subtitle {
-            font-size: 22px;
+            font-size: 18px;
             color: #4d5e50;
-            margin-bottom: 28px;
+            margin-bottom: 16px;
         }
 
         .secure-pill {
             display: inline-block;
-            width: fit-content;
-            margin: 0 auto 35px auto;
-            padding: 10px 20px;
+            margin: 0 auto 18px;
+            padding: 8px 16px;
             border-radius: 999px;
-            background: rgba(255,255,255,.58);
+            background: rgba(255,255,255,.65);
             border: 1px solid #c8e6c6;
             color: #2f7b39;
             font-weight: 700;
+            font-size: 14px;
         }
 
         .feature-grid {
             display: grid;
-            grid-template-columns: repeat(4, 1fr);
+            grid-template-columns: repeat(2, 1fr);
             gap: 0;
             background: rgba(255,255,255,.78);
-            border-radius: 22px;
-            padding: 16px 8px;
-            box-shadow: 0 10px 30px rgba(35,100,43,.08);
+            border-radius: 18px;
+            padding: 8px;
+            box-shadow: 0 8px 22px rgba(35,100,43,.07);
         }
 
         .feature {
-            padding: 12px 8px;
+            padding: 10px 7px;
             border-right: 1px solid #d9ead9;
             color: #34513a;
         }
 
-        .feature:last-child {
+        .feature:nth-child(2n) {
             border-right: 0;
         }
 
+        .feature:nth-child(-n+2) {
+            border-bottom: 1px solid #d9ead9;
+        }
+
         .feature-icon {
-            font-size: 28px;
-            margin-bottom: 5px;
+            font-size: 23px;
+            margin-bottom: 3px;
         }
 
         .feature-title {
             font-weight: 800;
-            font-size: 15px;
+            font-size: 13px;
         }
 
         .feature-text {
-            font-size: 12px;
-            margin-top: 4px;
+            font-size: 11px;
+            margin-top: 2px;
             color: #68766b;
         }
 
         .login-card {
-            min-height: 620px;
-            border-radius: 30px;
-            padding: 48px 48px;
-            background: rgba(255,255,255,.96);
+            min-height: 0;
+            border-radius: 24px;
+            padding: 34px 32px;
+            background: rgba(255,255,255,.97);
             border: 1px solid #e1e9e2;
-            box-shadow: 0 20px 60px rgba(27,75,35,.12);
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
+            box-shadow: 0 14px 38px rgba(27,75,35,.10);
         }
 
         .login-lock {
-            width: 76px;
-            height: 76px;
-            margin: 0 auto 18px auto;
+            width: 62px;
+            height: 62px;
+            margin: 0 auto 12px;
             border-radius: 50%;
             background: #eaf7e9;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 38px;
+            font-size: 31px;
         }
 
         .login-title {
             text-align: center;
-            font-size: 38px;
+            font-size: 32px;
             font-weight: 850;
             color: #17243a;
             margin-bottom: 4px;
@@ -200,7 +195,26 @@ def apply_css():
         .login-help {
             text-align: center;
             color: #6d756f;
-            margin-bottom: 28px;
+            margin-bottom: 20px;
+            font-size: 14px;
+        }
+
+        @media (max-width: 900px) {
+            .brand-panel, .login-card {
+                padding: 28px 22px;
+            }
+            .login-shell {
+                margin-top: 10px;
+            }
+        }
+
+        @media (max-width: 600px) {
+            .brand-title {
+                font-size: 38px;
+            }
+            .login-title {
+                font-size: 28px;
+            }
         }
 
         /* Buttons */
@@ -513,7 +527,6 @@ def mark_schedule_payment(member, amount):
 def login_page():
     apply_css()
 
-    st.markdown('<div class="login-shell">', unsafe_allow_html=True)
     left, right = st.columns([1.05, 0.95], gap="large")
 
     with left:
@@ -529,7 +542,7 @@ def login_page():
                     <div class="feature">
                         <div class="feature-icon">👥</div>
                         <div class="feature-title">সদস্য ব্যবস্থাপনা</div>
-                        <div class="feature-text">সহজে সদস্য যোগ ও তালিকা</div>
+                        <div class="feature-text">সদস্য যোগ ও তালিকা</div>
                     </div>
                     <div class="feature">
                         <div class="feature-icon">🐷</div>
@@ -539,7 +552,7 @@ def login_page():
                     <div class="feature">
                         <div class="feature-icon">💰</div>
                         <div class="feature-title">ঋণ ব্যবস্থাপনা</div>
-                        <div class="feature-text">ঋণ, কিস্তি ও হিসাব</div>
+                        <div class="feature-text">ঋণ ও কিস্তি হিসাব</div>
                     </div>
                     <div class="feature">
                         <div class="feature-icon">📊</div>
@@ -558,18 +571,24 @@ def login_page():
             <div class="login-card">
                 <div class="login-lock">🔐</div>
                 <div class="login-title">Admin Login</div>
-                <div class="login-help">অনুগ্রহ করে আপনার অ্যাকাউন্ট দিয়ে লগইন করুন</div>
+                <div class="login-help">আপনার অ্যাডমিন অ্যাকাউন্ট দিয়ে লগইন করুন</div>
+            </div>
             """,
             unsafe_allow_html=True,
         )
 
-        username = st.text_input("Username", placeholder="আপনার ইউজারনেম লিখুন")
+        username = st.text_input(
+            "Username",
+            placeholder="আপনার ইউজারনেম লিখুন",
+            key="login_username",
+        )
         password = st.text_input(
             "Password",
             type="password",
             placeholder="আপনার পাসওয়ার্ড লিখুন",
+            key="login_password",
         )
-        remember = st.checkbox("আমাকে মনে রাখুন")
+        remember = st.checkbox("আমাকে মনে রাখুন", key="login_remember")
 
         if st.button("🔐  লগইন করুন", use_container_width=True, type="primary"):
             if username.strip() == ADMIN_USER and password == ADMIN_PASS:
@@ -580,15 +599,10 @@ def login_page():
                 st.error("ইউজারনেম অথবা পাসওয়ার্ড সঠিক নয়।")
 
         st.markdown(
-            """
-                <div style="text-align:center;color:#7a847b;margin-top:25px;font-size:13px;">
-                    🔒 আপনার তথ্য নিরাপদ ও গোপন রাখা হবে
-                </div>
-                <div style="text-align:center;color:#8a938b;margin-top:18px;font-size:13px;">
-                    © 2026 আমার সমিতি · সর্বস্বত্ব সংরক্ষিত
-                </div>
-            </div>
-            """,
+            '<div style="text-align:center;color:#7a847b;margin-top:14px;font-size:12px;">'
+            '🔒 আপনার তথ্য নিরাপদ ও গোপন রাখা হবে<br><br>'
+            '© 2026 আমার সমিতি · সর্বস্বত্ব সংরক্ষিত'
+            '</div>',
             unsafe_allow_html=True,
         )
 
