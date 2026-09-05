@@ -46,35 +46,37 @@ if not st.session_state.logged_in:
 
 # ২. মূল অ্যাপ স্ক্রিন প্রসেস (লগইন সফল হলে এটি চলবে)
 elif st.session_state.logged_in:
-    st.sidebar.title("🎛️ কন্ট্রোল প্যানেল")
-    if st.sidebar.button("🔒 নিরাপদ লগআউট", type="primary"):
+    st.sidebar.title("🎛️  কন্ট্রোল প্যানেল")
+    if st.sidebar.button("🔒  নিরাপদ লগআউট", type="primary"):
         st.session_state.logged_in = False
         st.rerun()
         
+    # স্ক্রিনশটের মেনুর সাথে হুবহু মেলানো নামসমূহ
     choice = st.sidebar.radio("কোন কাজ করতে চান?", [
         "ড্যাশবোর্ড ও সদস্য তালিকা",
         "নতুন সদস্য যুক্ত করুন",
         "কিস্তি বা টাকা জমা নিন",
         "ঋণ বা লোন বিতরণ (Loan)",
         "ঋণের টাকা বা কিস্তি আদায়",
-        "সদস্য স্টেটメント (Statement)"
+        "সদস্য স্টেটমেন্ট (Statement)"
     ])
 
     st.markdown("<h1 style='text-align: center; color: #1E3A8A;'>🏦 আমার কিস্তি (Amar Kisti)</h1>", unsafe_allow_html=True)
     st.write("---")
 
-    # পৃষ্ঠা ১: ড্যাশবোর্ড
+    # পৃষ্ঠা ১: ড্যাশবোর্ড ও সদস্য তালিকা
     if choice == "ড্যাশবোর্ড ও সদস্য তালিকা":
         st.subheader("📊 ড্যাশবোর্ড ও সদস্য তালিকা")
         if not data["members"]:
             st.info("বর্তমানে কোনো সদস্য নিবন্ধিত নেই।")
-        for phone, info in data["members"].items():
-            total_loan = round(info.get("loan_principal", 0.0) + info.get("loan_interest", 0.0), 2)
-            st.info(f"👤 **নাম:** {info['name']} | 📱 **মোবাইল:** {phone} | 💰 **মোট সঞ্চয়:** {info.get('savings', 0.0)} টাকা | 📉 **অবशिष्ट ঋণ:** {total_loan} টাকা ({info.get('loan_type', 'নাই')})")
+        else:
+            for phone, info in data["members"].items():
+                total_loan = round(info.get("loan_principal", 0.0) + info.get("loan_interest", 0.0), 2)
+                st.info(f"👤 **নাম:** {info['name']} | 📱 **মোবাইল:** {phone} | 💰 **মোট সঞ্চয়:** {info.get('savings', 0.0)} টাকা | 📉 **অবशिष्ट ঋণ:** {total_loan} টাকা ({info.get('loan_type', 'নাই')})")
 
     # পৃষ্ঠা ২: নতুন সদস্য যুক্ত করুন
     elif choice == "নতুন সদস্য যুক্ত করুন":
-        st.subheader("➕ নতুন সদস্যের প্রোфাইল তৈরি করুন")
+        st.subheader("➕ নতুন সদস্যের প্রোফাইল তৈরি করুন")
         phone = st.text_input("📱 সদস্যের মোবাইল নম্বর দিন")
         name = st.text_input("✍️ সদস্যের পুরো নাম লিখুন")
         initial_savings = st.number_input("💵 প্রাথমিক সঞ্চয় জমা (টাকা)", min_value=0.0, step=10.0)
@@ -97,7 +99,7 @@ elif st.session_state.logged_in:
             else:
                 st.warning("দয়া করে নাম এবং মোবাইল নম্বর দিন।")
 
-    # পৃষ্ঠা ৩: কিস্তি জমা
+    # পৃষ্ঠা ৩: কিস্তি বা টাকা জমা নিন
     elif choice == "কিস্তি বা টাকা জমা নিন":
         st.subheader("💰 সদস্যের কিস্তি বা সঞ্চয়ের টাকা জমা নিন")
         if not data["members"]:
@@ -115,7 +117,7 @@ elif st.session_state.logged_in:
                     st.success(f"💸 সফলভাবে {amount} টাকা সঞ্চয় জমা করা হয়েছে!")
                     st.rerun()
 
-    # পৃষ্ঠা ৪: ঋণ বিতরণ
+    # পৃষ্ঠা ৪: ঋণ বা লোন বিতরণ (Loan)
     elif choice == "ঋণ বা লোন বিতরণ (Loan)":
         st.subheader("💸 সদস্যকে নতুন ঋণ বা লোন প্রদান করুন")
         if not data["members"]:
@@ -152,7 +154,7 @@ elif st.session_state.logged_in:
                         st.success(f"✅ সফলভাবে লোন অনুমোদন করা হয়েছে!")
                         st.rerun()
 
-    # পৃষ্ঠা ৫: কিস্তি আদায়
+    # পৃষ্ঠা ৫: ঋণের টাকা বা কিস্তি আদায়
     elif choice == "ঋণের টাকা বা কিস্তি আদায়":
         st.subheader("📉 ঋণের টাকা বা কিস্তি আদায় করুন")
         if not data["members"]:
@@ -194,5 +196,3 @@ elif st.session_state.logged_in:
             with col2:
                 if st.button("🔥 আর্লি সেটেলমেন্ট (ঋণ ক্লোজ করুন)"):
                     loan_date_str = info.get("loan_date", datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
-                    loan_date = datetime.strptime(loan_date_str, '%Y-%m-%d %H:%M:%S')
-                    days_passed = max((datetime.now() - loan_date).days, 1)
