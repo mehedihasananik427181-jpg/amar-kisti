@@ -3,13 +3,12 @@ import os
 import streamlit as st
 from datetime import datetime
 
-# আপনার সঠিক ডেটাবেজ ফাইলের নাম
+# ডেটাবেজ ও এডমিন সেটআপ
 DB_FILE = "database.json"
 ADMIN_USER = "admin"
 ADMIN_PASS = "somity2026"
 
 def load_data():
-    """আপনার মেহেদী হাসান অনিকসহ সকল পুরোনো ডাটা নিরাপদ উপায়ে লোড করার ফাংশন"""
     if os.path.exists(DB_FILE):
         try:
             with open(DB_FILE, "r", encoding="utf-8") as file:
@@ -18,7 +17,6 @@ def load_data():
                     return data
         except:
             pass
-    # ফাইল না থাকলে বা এরর হলে স্বয়ংক্রিয়ভাবে স্ট্রাকচার তৈরি করবে যাতে KeyError না আসে
     return {"members": {}}
 
 def save_data(data):
@@ -26,15 +24,14 @@ def save_data(data):
         with open(DB_FILE, "w", encoding="utf-8") as file:
             json.dump(data, file, ensure_ascii=False, indent=4)
     except:
-        st.error("🎰 ডাটা সেভ করতে সমস্যা হয়েছে!")
+        pass
 
 data = load_data()
 
-# সেশন ট্র্যাকিং
 if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
 
-# লগইন স্ক্রিন প্রসেস
+# ১. লগইন স্ক্রিন প্রসেস
 if not st.session_state.logged_in:
     st.markdown("<h2 style='text-align: center; color: #1E3A8A;'>🏦 সমিতি ম্যানেজমেন্ট সিস্টেম</h2>", unsafe_allow_html=True)
     st.write("---")
@@ -48,20 +45,20 @@ if not st.session_state.logged_in:
             else:
                 st.error("❌ ভুল পাসওয়ার্ড!")
 
-# মূল অ্যাপ্লিকেশন উইন্ডো (আপনার নতুন সুন্দর ডিজাইনটি অক্ষত রাখা হয়েছে)
-else:
+# ২. মূল অ্যাপ্লিকেশন স্ক্রিন প্রসেস (লগইন সফল হলে এটি চলবে)
+elif st.session_state.logged_in:
     st.sidebar.title("📑 মেনু")
     st.sidebar.write(f"🧑‍💼 স্বাগতম, {ADMIN_USER}")
     st.sidebar.write("---")
     
-    # নতুন ডিজাইনের ৬টি বাটন মেনু
+    # স্ক্রিনশটের মেনুর সাথে স্পেস ও বানান হুবহু মিল রেখে তৈরি অপশনসমূহ
     choice = st.sidebar.radio("কোন কাজ করতে চান?", [
         "📊 ড্যাশবোর্ড",
         "👥 সদস্য ব্যবস্থাপনা",
         "💰 সঞ্চয় ব্যবস্থাপনা",
         "💳 ঋণ ব্যবস্থাপনা",
         "📥 ঋণের টাকা বা কিস্তি আদায়",
-        "📋 সদস্য স্টেটমেন্ট (Statement)"
+        "🗂️ সদস্য স্টেটমেন্ট (Statement)"
     ])
     
     st.sidebar.write("---")
@@ -199,3 +196,6 @@ else:
                         if repay_amount >= interest:
                             data["members"][phone]["loan_principal"] -= (repay_amount - interest)
                             data["members"][phone]["loan_interest"] = 0.0
+                        else:
+                            data["members"][phone]["loan_interest"] -= repay_amount
+                        
