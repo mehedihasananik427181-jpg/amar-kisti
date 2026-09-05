@@ -28,6 +28,8 @@ MENU = [
     "💸 ঋণ প্রদান",
     "💳 ঋণের টাকা বা কিস্তি আদায়",
     "📋 সদস্য স্টেটমেন্ট (Statement)",
+    "📊 রিপোর্ট",
+    "💾 ব্যাকআপ ও ডাটা",
 ]
 
 
@@ -1175,6 +1177,206 @@ def statement_page(data):
         st.info("এই সদস্যের কোনো history নেই।")
 
 
+
+
+# =========================================================
+# Page 7: Reports
+# =========================================================
+
+def reports_page(data):
+    page_header(
+        "📊 রিপোর্ট",
+        "সমিতির সঞ্চয়, ঋণ, আদায় ও সদস্যদের সামগ্রিক হিসাব",
+    )
+
+    members = data.get("members", {})
+    total_members = len(members)
+    total_savings = sum(float(m.get("savings", 0)) for m in members.values())
+    active_loans = [
+        m for m in members.values() if outstanding_principal(m) > 0.009
+    ]
+    total_loan_disbursed = sum(
+        float(m.get("loan_original_principal", 0)) for m in members.values()
+    )
+    total_loan_outstanding = sum(
+        outstanding_principal(m) for m in members.values()
+    )
+    total_principal_paid = sum(
+        float(m.get("loan_paid_principal", 0)) for m in members.values()
+    )
+    total_interest_paid = sum(
+        float(m.get("loan_paid_interest", 0)) for m in members.values()
+    )
+
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("👥 মোট সদস্য", total_members)
+    c2.metric("💰 মোট সঞ্চয়", money(total_savings))
+    c3.metric("💸 চলমান ঋণ", len(active_loans))
+    c4.metric("📌 বকেয়া মূলধন", money(total_loan_outstanding))
+
+    st.markdown("---")
+    st.subheader("📈 আর্থিক সারসংক্ষেপ")
+
+    r1, r2, r3 = st.columns(3)
+    r1.metric("মোট ঋণ বিতরণ", money(total_loan_disbursed))
+    r2.metric("আদায় করা মূলধন", money(total_principal_paid))
+    r3.metric("আদায় করা সুদ", money(total_interest_paid))
+
+    report_rows = []
+    for mid, m in members.items():
+        report_rows.append(
+            {
+                "সদস্য": m.get("name", ""),
+                "মোবাইল": mid,
+                "সঞ্চয়": round(float(m.get("savings", 0)), 2),
+                "ঋণ বিতরণ": round(float(m.get("loan_original_principal", 0)), 2),
+                "মূলধন আদায়": round(float(m.get("loan_paid_principal", 0)), 2),
+                "বকেয়া মূলধন": round(outstanding_principal(m), 2),
+                "সুদ আদায়": round(float(m.get("loan_paid_interest", 0)), 2),
+                "অবস্থা": "চলমান" if outstanding_principal(m) > 0.009 else "ঋণ নেই",
+            }
+        )
+
+    if report_rows:
+        report_df = pd.DataFrame(report_rows)
+        st.subheader("👥 সদস্যভিত্তিক রিপোর্ট")
+        st.dataframe(report_df, use_container_width=True, hide_index=True)
+
+        csv_bytes = report_df.to_csv(index=False).encode("utf-8-sig")
+        st.download_button(
+            "📥 রিপোর্ট CSV ডাউনলোড",
+            data=csv_bytes,
+            file_name="somity_report.csv",
+            mime="text/csv",
+            use_container_width=True,
+        )
+
+    st.subheader("🕐 সাম্প্রতিক লেনদেন")
+    transactions = []
+    for mid, m in members.items():
+        for item in m.get("history", []):
+            transactions.append(
+                {
+                    "মোবাইল": mid,
+                    "সদস্য": m.get("name", ""),
+                    "তারিখ ও সময়": item[:19],
+                    "লেনদেন": item[22:] if len(item) > 22 else item,
+                }
+            )
+
+    transactions = sorted(
+        transactions,
+        key=lambda x: x["তারিখ ও সময়"],
+        reverse=True,
+    )
+
+    if transactions:
+        st.dataframe(
+            pd.DataFrame(transactions[:50]),
+            use_container_width=True,
+            hide_index=True,
+        )
+    else:
+        st.info("এখনও কোনো লেনদেন নেই।")
+
+
+# =========================================================
+# Page 8: Backup & Data
+# =========================================================
+
+def backup_page(data):
+    page_header(
+        "💾 ব্যাকআপ ও ডাটা",
+        "database.json-এর নিরাপদ ব্যাকআপ রাখুন এবং প্রয়োজনে ডাটা Restore করুন",
+    )
+
+    members = data.get("members", {})
+    total_savings = sum(float(m.get("savings", 0)) for m in members.values())
+    active_loans = sum(
+        1 for m in members.values() if outstanding_principal(m) > 0.009
+    )
+
+    c1, c2, c3 = st.columns(3)
+    c1.metric("মোট সদস্য", len(members))
+    c2.metric("মোট সঞ্চয়", money(total_savings))
+    c3.metric("চলমান ঋণ", active_loans)
+
+    st.markdown("---")
+    st.subheader("📥 ডাটা Backup")
+
+    backup_payload = json.dumps(
+        data,
+        ensure_ascii=False,
+        indent=2,
+    ).encode("utf-8")
+
+    st.download_button(
+        "💾 সম্পূর্ণ Backup Download",
+        data=backup_payload,
+        file_name=f"somity_backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json",
+        mime="application/json",
+        use_container_width=True,
+    )
+
+    st.caption(
+        "Backup ফাইলটি নিরাপদ জায়গায় রাখুন। এতে সদস্য, সঞ্চয়, ঋণ এবং transaction history থাকবে।"
+    )
+
+    st.markdown("---")
+    st.subheader("📤 Backup Restore")
+
+    uploaded = st.file_uploader(
+        "আগের Backup JSON নির্বাচন করুন",
+        type=["json"],
+        help="শুধু এই অ্যাপের বৈধ database backup JSON ব্যবহার করুন।",
+    )
+
+    if uploaded is not None:
+        try:
+            restored = json.load(uploaded)
+            restored = normalize_data(restored)
+
+            if not isinstance(restored, dict) or not isinstance(
+                restored.get("members"), dict
+            ):
+                st.error("এই ফাইলটি বৈধ সমিতি Backup নয়।")
+            else:
+                st.warning(
+                    f"Restore করলে বর্তমান {len(members)} জন সদস্যের ডাটা "
+                    f"এর জায়গায় Backup-এর {len(restored['members'])} জন সদস্যের ডাটা আসবে।"
+                )
+
+                confirm = st.checkbox(
+                    "আমি নিশ্চিত, এই Backup Restore করতে চাই।",
+                    key="restore_confirm",
+                )
+
+                if st.button(
+                    "♻️ Backup Restore করুন",
+                    type="primary",
+                    use_container_width=True,
+                    disabled=not confirm,
+                ):
+                    save_data(restored)
+                    st.session_state["restore_success"] = True
+                    st.rerun()
+
+        except (json.JSONDecodeError, UnicodeDecodeError):
+            st.error("JSON ফাইলটি পড়া যায়নি। সঠিক Backup ফাইল নির্বাচন করুন।")
+        except Exception as exc:
+            st.error(f"Restore করা যায়নি: {exc}")
+
+    if st.session_state.pop("restore_success", False):
+        st.success("✅ Backup সফলভাবে Restore হয়েছে।")
+
+    st.markdown("---")
+    st.subheader("⚠️ গুরুত্বপূর্ণ")
+    st.info(
+        "Streamlit Cloud-এ database.json-এর পরিবর্তন GitHub-এর মতো স্থায়ী storage নয়। "
+        "নিয়মিত Backup Download করে নিজের কম্পিউটার/নিরাপদ cloud storage-এ রাখুন।"
+    )
+
+
 # =========================================================
 # Main app
 # =========================================================
@@ -1240,6 +1442,12 @@ def main():
 
     elif page == "📋 সদস্য স্টেটমেন্ট (Statement)":
         statement_page(data)
+
+    elif page == "📊 রিপোর্ট":
+        reports_page(data)
+
+    elif page == "💾 ব্যাকআপ ও ডাটা":
+        backup_page(data)
 
 
 if __name__ == "__main__":
