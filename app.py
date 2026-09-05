@@ -17,7 +17,6 @@ def load_data():
         if os.path.exists(DB_FILE):
             with open(DB_FILE, "r", encoding="utf-8") as file:
                 data = json.load(file)
-                # ডাটা যদি ডিকশনারি টাইপ হয়, তবেই কেবল হিস্ট্রি লুপ চলবে
                 if isinstance(data, dict):
                     return data
         return {"members": {}}
@@ -107,7 +106,7 @@ else:
                         "name": name,
                         "savings": initial_savings,
                         "loan": 0.0,
-                        "history": [f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')} - হিসাব खोला হয়েছে প্রাথমিক সঞ্চয় {initial_savings} টাকা দিয়ে।"]
+                        "history": [f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')} - হিসাব খোলা হয়েছে প্রাথমিক সঞ্চয় {initial_savings} টাকা দিয়ে।"]
                     }
                     save_data(data)
                     st.success(f"🎉 সফলভাবে {name}-এর প্রোফাইল তৈরি হয়েছে!")
@@ -165,7 +164,7 @@ else:
                     st.success(f"✅ সফলভাবে {loan_amount} টাকা ঋণ বিতরণ করা হয়েছে (মোট প্রদেয়: {total_payable})")
                     st.rerun()
 
-    # ৫. ঋণের টাকা বা কিস্তি আদায় (এটি আগে ফাঁকা ছিল, এখন যুক্ত করা হয়েছে)
+    # ৫. ঋণের টাকা বা কিস্তি আদায়
     elif choice == "ঋণের টাকা বা কিস্তি আদায়":
         st.subheader("📉 ঋণের টাকা বা কিস্তি আদায় করুন")
         if not data["members"]:
@@ -191,7 +190,7 @@ else:
                 else:
                     st.warning("পরিশোধের পরিমাণ ০ এর বেশি হতে হবে অথবা সদস্যের কোনো বকেয়া লোন নেই।")
 
-    # ৬. সদস্য স্টেটমেন্ট (Statement) (এটিও আগে ফাঁকা ছিল, এখন যুক্ত করা হয়েছে)
+    # ৬. সদস্য স্টেটমেন্ট (Statement)
     elif choice == "সদস্য স্টেটমেন্ট (Statement)":
         st.subheader("📋 সদস্যের সম্পূর্ণ লেনদেন স্টেটমেন্ট")
         if not data["members"]:
@@ -211,3 +210,6 @@ else:
             
             history = info.get("history", [])
             if not history:
+                st.info("এই সদস্যের কোনো লেনদেনের ইতিহাস পাওয়া যায়নি।")
+            else:
+                for idx, log in enumerate(reversed(history), 1):
