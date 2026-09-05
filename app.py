@@ -2,7 +2,7 @@ import json
 import os
 import streamlit as st
 import pandas as pd
-from datetime import datetime, timedelta
+from datetime import datetime
 
 # ডেটাবেজ ফাইলের নাম
 DB_FILE = "database.json"
@@ -41,7 +41,7 @@ if "logged_in" not in st.session_state:
 # লগইন পেজ ডিজাইন
 if not st.session_state.logged_in:
     st.markdown("<h1 style='text-align: center; color: #1E3A8A;'>🏦 আমার কিস্তি</h1>", unsafe_allow_html=True)
-    st.markdown("<p style='text-align: center; font-style: italic;'>Micro-Finance & Somity Management System v7.0</p>", unsafe_allow_html=True)
+    st.markdown("<p style='text-align: center; font-style: italic;'>Micro-Finance & Somity Management System v7.5</p>", unsafe_allow_html=True)
     st.write("---")
     
     with st.form("login_form"):
@@ -85,7 +85,8 @@ else:
         else:
             for phone, info in data["members"].items():
                 loan_type = info.get("loan_type", "নাই")
-                st.info(f"👤 **নাম:** {info['name']} | 📱 **মোবাইল:** {phone} | 💰 **মোট সঞ্চয়:** {info.get('savings', 0.0)} টাকা | 📉 **অবশিষ্ট ঋণ:** {info.get('loan_principal', 0.0) + info.get('loan_interest', 0.0)} টাকা ({loan_type})")
+                total_loan = round(info.get("loan_principal", 0.0) + info.get("loan_interest", 0.0), 2)
+                st.info(f"👤 **নাম:** {info['name']} | 📱 **মোবাইল:** {phone} | 💰 **মোট সঞ্চয়:** {info.get('savings', 0.0)} টাকা | 📉 **অবশিষ্ট ঋণ:** {total_loan} টাকা ({loan_type})")
 
     # ২. নতুন সদস্য যুক্ত করুন
     elif choice == "নতুন সদস্য যুক্ত করুন":
@@ -153,17 +154,15 @@ else:
                 st.error("⚠️ এই সদস্যের পূর্বের লোন বকেয়া আছে। নতুন লোন দেওয়া যাবে না।")
             else:
                 loan_amount = st.number_input("💵 ঋণের আসল পরিমাণ (টাকা)", min_value=0.0, step=100.0)
-                interest_rate = st.slider("📊 বার্ষিক সুদের হার নির্ধারণ করুন (%)", 1, 50, 10)
-                
+                interest_rate = st.slider("📊 সুদের হার নির্ধারণ করুন (%)", 1, 50, 10)
                 loan_type = st.selectbox("📅 কিস্তির ধরন নির্বাচন করুন", ["দিনের হিসাবে", "সাপ্তাহিক হিসাবে", "মাসিক হিসাবে"])
                 duration = st.number_input("⏱️ মেয়াদ বা কিস্তির সংখ্যা দিন", min_value=1, step=1, value=10)
                 
-                # ক্রমহ্রাসমান (Reducing Balance) প্রাথমিক সুদ হিসাব
-                # প্রথম কিস্তির জন্য আনুমানিক টোটাল প্রদেয় সুদ দেখানো হচ্ছে
-                total_interest = (loan_amount * (interest_rate / 100) * (duration / 12 if loan_type == "মাসিক হিসাবে" else duration / 52 if loan_type == "সাপ্তাহিক হিসাবে" else duration / 365))
-                total_payable = loan_amount + total_interest
+                # প্রারম্ভিক সরল/ক্রমহ্রাসমান মিশ্র সুদ হিসাব
+                factor = duration / 12 if loan_type == "মাসিক হিসাবে" else duration / 52 if loan_type == "সাপ্তাহিক হিসাবে" else duration / 365
+                total_interest = loan_amount * (interest_rate / 100) * factor
                 
-                st.warning(f"📉 প্রারম্ভিক হিসাব: আসল {loan_amount} টাকা | আনুমানিক মোট সুদ: {round(total_interest, 2)} টাকা")
+                st.warning(f"📉 আসল: {loan_amount} টাকা | আনুমানিক মোট সুদ: {round(total_interest, 2)} টাকা")
                 
                 if st.button("🚀 ঋণ বা লোন অনুমোদন করুন"):
                     if loan_amount > 0:
@@ -182,8 +181,8 @@ else:
                         st.rerun()
 
     # ৫. ঋণের টাকা বা কিস্তি আদায়
-    elif choice == "ঋণের টাকা বা kiস্তি আদায়":
-        st.subheader("📉 ঋণের টাকা বা কিস্তি আদায় করুন (ক্রমহ্রাসমান ও আর্লি সেটেলমেন্ট লজিক)")
+    elif choice == "ঋণের টাকা বা কিস্তি আদায়":
+        st.subheader("📉 ঋণের টাকা বা কিস্তি আদায় করুন")
         if not data["members"]:
             st.warning("কোনো সদস্য নেই।")
         else:
@@ -202,9 +201,13 @@ else:
                 st.info(f"👤 সদস্য: {info['name']} | 💵 বকেয়া আসল: {round(principal, 2)} টাকা | 📊 বকেয়া সুদ: {round(interest, 2)} টাকা")
                 st.error(f"💰 মোট প্রদেয় বকেয়া: {round(total_due, 2)} টাকা")
                 
-                # আর্লি সেটেলমেন্ট ডিসকাউন্ট ক্যালকুলেটর
                 st.markdown("---")
-                st.markdown("💡 **আর্লি সেটেলমেন্ট বা দ্রুত পরিশোধ অপশন:**")
-                early_pay = st.checkbox("সদস্য কি আজকেই সম্পূর্ণ লোন একসাথে শোধ করে দিতে চান?")
+                repay_amount = st.number_input("💵 কিস্তি পরিশোধের পরিমাণ (টাকা)", min_value=0.0, max_value=float(total_due), step=10.0)
                 
-                if early_pay:
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    if st.button("✔️ সাধারণ কিস্তি জমা"):
+                        if repay_amount > 0:
+                            # সাধারণ ক্রমহ্রাসমান পেমেন্ট প্রসেস
+                            if repay_amount >= interest:
