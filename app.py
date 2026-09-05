@@ -25,6 +25,7 @@ MENU = [
     "🏠 ড্যাশবোর্ড",
     "👥 সদস্য ব্যবস্থাপনা",
     "💰 সঞ্চয় জমা",
+    "🏦 DPS / FDR মেয়াদি সঞ্চয়",
     "💸 ঋণ প্রদান",
     "💳 ঋণের টাকা বা কিস্তি আদায়",
     "📋 সদস্য স্টেটমেন্ট (Statement)",
@@ -360,6 +361,9 @@ def ensure_member_defaults(member):
     member.setdefault("loan_installment_count", 0)
     member.setdefault("loan_total_installments", 0)
     member.setdefault("loan_schedule", [])
+    member.setdefault("term_deposits", [])
+    if not isinstance(member["term_deposits"], list):
+        member["term_deposits"] = []
     member.setdefault("history", [])
     if not isinstance(member["history"], list):
         member["history"] = []
@@ -781,6 +785,284 @@ def member_management_page(data):
 
 
 # =========================================================
+# DPS / FDR calculations
+# =========================================================
+def add_months(base_date, months):
+    """Add calendar months without external dependencies."""
+    month_index = base_date.month - 1 + int(months)
+    year = base_date.year + month_index // 12
+    month = month_index % 12 + 1
+    # Last valid day of target month
+    if month == 12:
+        next_month = date(year + 1, 1, 1)
+    else:
+        next_month = date(year, month + 1, 1)
+    last_day = (next_month - timedelta(days=1)).day
+    return date(year, month, min(base_date.day, last_day))
+
+
+def deposit_maturity_date(start_dt, term_months):
+    return datetime.combine(
+        add_months(start_dt.date(), term_months),
+        start_dt.time(),
+    )
+
+
+def term_deposit_interest(deposit, as_of=None):
+    """
+    Maturity interest calculation.
+    FDR: principal earns annual simple interest for actual elapsed days.
+    DPS: every contribution earns annual simple interest from its own
+    contribution timestamp until maturity/as_of.
+    """
+    as_of = as_of or datetime.now()
+    rate = float(deposit.get("annual_rate", 0.0))
+
+    if deposit.get("product") == "FDR":
+        principal = float(deposit.get("principal", 0.0))
+        start = parse_dt(deposit.get("start_at")) or as_of
+        end = min(as_of, parse_dt(deposit.get("maturity_at")) or as_of)
+        days = max((end - start).total_seconds() / 86400.0, 0.0)
+        return round(principal * rate / 100.0 * days / 365.0, 2)
+
+    total = 0.0
+    for contribution in deposit.get("contributions", []):
+        amount = float(contribution.get("amount", 0.0))
+        cdt = parse_dt(contribution.get("date")) or as_of
+        end = min(as_of, parse_dt(deposit.get("maturity_at")) or as_of)
+        days = max((end - cdt).total_seconds() / 86400.0, 0.0)
+        total += amount * rate / 100.0 * days / 365.0
+    return round(total, 2)
+
+
+def term_deposit_principal(deposit):
+    if deposit.get("product") == "FDR":
+        return round(float(deposit.get("principal", 0.0)), 2)
+    return round(
+        sum(float(x.get("amount", 0.0)) for x in deposit.get("contributions", [])),
+        2,
+    )
+
+
+def active_term_deposits(member):
+    return [x for x in member.get("term_deposits", []) if x.get("status") == "active"]
+
+
+# =========================================================
+# Page: DPS / FDR
+# =========================================================
+def term_deposit_page(data):
+    page_header(
+        "🏦 DPS / FDR মেয়াদি সঞ্চয়",
+        "৩, ৬, ৯ বা ১২ মাসের জন্য টাকা রেখে মেয়াদ শেষে মূলধন ও সুদ প্রদান করুন",
+    )
+
+    if not data["members"]:
+        st.warning("প্রথমে সদস্য ব্যবস্থাপনা থেকে সদস্য যোগ করুন।")
+        return
+
+    ids = member_options(data)
+    selected = st.selectbox(
+        "সদস্য নির্বাচন করুন",
+        ids,
+        format_func=lambda x: member_label(x, data["members"][x]),
+        key="term_member",
+    )
+    member = data["members"][selected]
+    ensure_member_defaults(member)
+
+    c1, c2, c3 = st.columns(3)
+    c1.metric("💰 সাধারণ সঞ্চয়", money(member.get("savings", 0)))
+    c2.metric(
+        "🏦 মেয়াদি আমানত",
+        money(sum(term_deposit_principal(x) for x in active_term_deposits(member))),
+    )
+    c3.metric("📌 সক্রিয় DPS/FDR", len(active_term_deposits(member)))
+
+    st.markdown("---")
+    st.subheader("➕ নতুন DPS / FDR খুলুন")
+
+    with st.form("term_deposit_form"):
+        product = st.selectbox("সঞ্চয়ের ধরন", ["FDR", "DPS"])
+        term_months = st.selectbox("মেয়াদ", [3, 6, 9, 12], format_func=lambda x: f"{x} মাস")
+        annual_rate = st.number_input(
+            "বার্ষিক সুদের হার (%)",
+            min_value=0.0,
+            max_value=100.0,
+            value=10.0 if product == "FDR" else 8.0,
+            step=0.25,
+        )
+        amount = st.number_input(
+            "জমার পরিমাণ" if product == "FDR" else "প্রতি মাসের DPS কিস্তি",
+            min_value=100.0,
+            step=100.0,
+            value=1000.0,
+        )
+        open_date = st.date_input("শুরুর তারিখ", value=date.today())
+        submit = st.form_submit_button(
+            "🏦 মেয়াদি সঞ্চয় চালু করুন",
+            use_container_width=True,
+            type="primary",
+        )
+
+    if submit:
+        start_dt = datetime.combine(open_date, datetime.now().time())
+        maturity_dt = deposit_maturity_date(start_dt, term_months)
+
+        if float(member.get("savings", 0.0)) < float(amount):
+            st.error(
+                f"সাধারণ সঞ্চয়ে পর্যাপ্ত টাকা নেই। প্রয়োজন {money(amount)}, "
+                f"বর্তমানে আছে {money(member.get('savings', 0))}."
+            )
+        else:
+            deposit_id = f"TD-{datetime.now().strftime('%Y%m%d%H%M%S%f')}"
+            if product == "FDR":
+                deposit = {
+                    "id": deposit_id,
+                    "product": "FDR",
+                    "principal": round(float(amount), 2),
+                    "annual_rate": float(annual_rate),
+                    "term_months": int(term_months),
+                    "start_at": start_dt.strftime("%Y-%m-%d %H:%M:%S"),
+                    "maturity_at": maturity_dt.strftime("%Y-%m-%d %H:%M:%S"),
+                    "status": "active",
+                    "contributions": [],
+                }
+                member["savings"] = round(float(member.get("savings", 0)) - amount, 2)
+                add_history(
+                    member,
+                    f"FDR খোলা: {money(amount)} | মেয়াদ: {term_months} মাস | "
+                    f"হার: {annual_rate:.2f}% | পরিপক্বতা: {maturity_dt.strftime('%Y-%m-%d %H:%M:%S')}",
+                )
+            else:
+                contribution = {
+                    "amount": round(float(amount), 2),
+                    "date": start_dt.strftime("%Y-%m-%d %H:%M:%S"),
+                }
+                deposit = {
+                    "id": deposit_id,
+                    "product": "DPS",
+                    "annual_rate": float(annual_rate),
+                    "term_months": int(term_months),
+                    "monthly_amount": round(float(amount), 2),
+                    "start_at": start_dt.strftime("%Y-%m-%d %H:%M:%S"),
+                    "maturity_at": maturity_dt.strftime("%Y-%m-%d %H:%M:%S"),
+                    "status": "active",
+                    "contributions": [contribution],
+                }
+                member["savings"] = round(float(member.get("savings", 0)) - amount, 2)
+                add_history(
+                    member,
+                    f"DPS চালু: প্রথম কিস্তি {money(amount)} | মেয়াদ: {term_months} মাস | "
+                    f"হার: {annual_rate:.2f}% | পরিপক্বতা: {maturity_dt.strftime('%Y-%m-%d %H:%M:%S')}",
+                )
+
+            member["term_deposits"].append(deposit)
+            save_and_rerun(data)
+
+    st.markdown("---")
+    st.subheader("📋 সক্রিয় DPS / FDR")
+
+    active = active_term_deposits(member)
+    if not active:
+        st.info("এই সদস্যের কোনো সক্রিয় DPS/FDR নেই।")
+        return
+
+    for dep in active:
+        principal = term_deposit_principal(dep)
+        maturity = parse_dt(dep.get("maturity_at")) or datetime.now()
+        estimated_interest = term_deposit_interest(dep, min(datetime.now(), maturity))
+        matured = datetime.now() >= maturity
+        label = f"{dep.get('product')} • {money(principal)} • {dep.get('term_months')} মাস"
+
+        with st.expander(label, expanded=matured):
+            d1, d2, d3, d4 = st.columns(4)
+            d1.metric("মূলধন", money(principal))
+            d2.metric("হার", f"{float(dep.get('annual_rate', 0)):.2f}%")
+            d3.metric("আনুমানিক সুদ", money(estimated_interest))
+            d4.metric("মেয়াদ", dep.get("term_months", 0), "মাস")
+
+            st.write(f"**শুরু:** {dep.get('start_at', '')}")
+            st.write(f"**মেয়াদ পূর্তি:** {dep.get('maturity_at', '')}")
+
+            if dep.get("product") == "DPS":
+                st.write(f"**মাসিক কিস্তি:** {money(dep.get('monthly_amount', 0))}")
+                st.write(f"**জমা কিস্তির সংখ্যা:** {len(dep.get('contributions', []))}")
+
+                if not matured:
+                    if st.button(
+                        "💰 DPS কিস্তি জমা করুন",
+                        key=f"dps_add_{dep['id']}",
+                        use_container_width=True,
+                    ):
+                        monthly = float(dep.get("monthly_amount", 0))
+                        if float(member.get("savings", 0)) < monthly:
+                            st.error("সাধারণ সঞ্চয়ে এই কিস্তির জন্য পর্যাপ্ত টাকা নেই।")
+                        else:
+                            now = datetime.now()
+                            dep.setdefault("contributions", []).append(
+                                {
+                                    "amount": round(monthly, 2),
+                                    "date": now.strftime("%Y-%m-%d %H:%M:%S"),
+                                }
+                            )
+                            member["savings"] = round(float(member.get("savings", 0)) - monthly, 2)
+                            add_history(
+                                member,
+                                f"DPS কিস্তি জমা: {money(monthly)} | "
+                                f"চুক্তি: {dep['id']}",
+                            )
+                            save_and_rerun(data)
+
+            if matured:
+                final_interest = term_deposit_interest(dep, maturity)
+                total_payout = round(principal + final_interest, 2)
+                st.success(
+                    f"✅ মেয়াদ পূর্ণ হয়েছে। মোট ফেরত: {money(total_payout)} "
+                    f"(মূলধন {money(principal)} + সুদ {money(final_interest)})"
+                )
+                if st.button(
+                    "🏁 মেয়াদি সঞ্চয় ভাঙিয়ে টাকা ও সুদ প্রদান করুন",
+                    key=f"mature_{dep['id']}",
+                    type="primary",
+                    use_container_width=True,
+                ):
+                    member["savings"] = round(float(member.get("savings", 0)) + total_payout, 2)
+                    dep["status"] = "matured_paid"
+                    dep["paid_at"] = now_str()
+                    dep["paid_interest"] = final_interest
+                    add_history(
+                        member,
+                        f"{dep.get('product')} মেয়াদ পূর্তি ও পরিশোধ: "
+                        f"মূলধন {money(principal)} + সুদ {money(final_interest)} = "
+                        f"মোট {money(total_payout)} | চুক্তি: {dep['id']}",
+                    )
+                    save_and_rerun(data)
+
+    st.markdown("---")
+    st.subheader("🗂️ এই সদস্যের মেয়াদি সঞ্চয়ের ইতিহাস")
+    history_rows = []
+    for dep in member.get("term_deposits", []):
+        principal = term_deposit_principal(dep)
+        paid_interest = float(dep.get("paid_interest", 0.0))
+        history_rows.append(
+            {
+                "ধরন": dep.get("product", ""),
+                "চুক্তি": dep.get("id", ""),
+                "মূলধন": round(principal, 2),
+                "হার": f"{float(dep.get('annual_rate', 0)):.2f}%",
+                "মেয়াদ": f"{dep.get('term_months', 0)} মাস",
+                "শুরু": dep.get("start_at", ""),
+                "মেয়াদ পূর্তি": dep.get("maturity_at", ""),
+                "সুদ প্রদান": round(paid_interest, 2),
+                "অবস্থা": dep.get("status", ""),
+            }
+        )
+    if history_rows:
+        st.dataframe(pd.DataFrame(history_rows), use_container_width=True, hide_index=True)
+
+
+# =========================================================
 # Page 3: Savings deposit
 # =========================================================
 def savings_page(data):
@@ -1121,10 +1403,14 @@ def statement_page(data):
     )
     member = data["members"][selected]
 
-    c1, c2, c3 = st.columns(3)
+    c1, c2, c3, c4 = st.columns(4)
     c1.metric("সঞ্চয়", money(member.get("savings", 0)))
     c2.metric("বকেয়া ঋণ", money(member.get("loan_principal", 0)))
     c3.metric("বকেয়া সুদ", money(member.get("loan_interest", 0)))
+    c4.metric(
+        "DPS/FDR",
+        money(sum(term_deposit_principal(x) for x in active_term_deposits(member))),
+    )
 
     st.markdown("### 👤 সদস্যের তথ্য")
     info = {
@@ -1151,6 +1437,23 @@ def statement_page(data):
             use_container_width=True,
             hide_index=True,
         )
+
+    if member.get("term_deposits"):
+        st.markdown("### 🏦 DPS / FDR হিসাব")
+        td_rows = []
+        for dep in member.get("term_deposits", []):
+            td_rows.append(
+                {
+                    "ধরন": dep.get("product", ""),
+                    "চুক্তি": dep.get("id", ""),
+                    "মূলধন": term_deposit_principal(dep),
+                    "হার": f"{float(dep.get('annual_rate', 0)):.2f}%",
+                    "মেয়াদ": f"{dep.get('term_months', 0)} মাস",
+                    "মেয়াদ পূর্তি": dep.get("maturity_at", ""),
+                    "অবস্থা": dep.get("status", ""),
+                }
+            )
+        st.dataframe(pd.DataFrame(td_rows), use_container_width=True, hide_index=True)
 
     st.markdown("### 🕐 সম্পূর্ণ Transaction History")
 
@@ -1201,6 +1504,11 @@ def reports_page(data):
     total_loan_outstanding = sum(
         outstanding_principal(m) for m in members.values()
     )
+    total_term_deposit = sum(
+        term_deposit_principal(dep)
+        for m in members.values()
+        for dep in active_term_deposits(m)
+    )
     total_principal_paid = sum(
         float(m.get("loan_paid_principal", 0)) for m in members.values()
     )
@@ -1208,11 +1516,12 @@ def reports_page(data):
         float(m.get("loan_paid_interest", 0)) for m in members.values()
     )
 
-    c1, c2, c3, c4 = st.columns(4)
+    c1, c2, c3, c4, c5 = st.columns(5)
     c1.metric("👥 মোট সদস্য", total_members)
     c2.metric("💰 মোট সঞ্চয়", money(total_savings))
-    c3.metric("💸 চলমান ঋণ", len(active_loans))
-    c4.metric("📌 বকেয়া মূলধন", money(total_loan_outstanding))
+    c3.metric("🏦 DPS/FDR", money(total_term_deposit))
+    c4.metric("💸 চলমান ঋণ", len(active_loans))
+    c5.metric("📌 বকেয়া মূলধন", money(total_loan_outstanding))
 
     st.markdown("---")
     st.subheader("📈 আর্থিক সারসংক্ষেপ")
@@ -1233,6 +1542,9 @@ def reports_page(data):
                 "মূলধন আদায়": round(float(m.get("loan_paid_principal", 0)), 2),
                 "বকেয়া মূলধন": round(outstanding_principal(m), 2),
                 "সুদ আদায়": round(float(m.get("loan_paid_interest", 0)), 2),
+                "DPS/FDR": round(
+                    sum(term_deposit_principal(x) for x in active_term_deposits(m)), 2
+                ),
                 "অবস্থা": "চলমান" if outstanding_principal(m) > 0.009 else "ঋণ নেই",
             }
         )
@@ -1433,6 +1745,9 @@ def main():
 
     elif page == "💰 সঞ্চয় জমা":
         savings_page(data)
+
+    elif page == "🏦 DPS / FDR মেয়াদি সঞ্চয়":
+        term_deposit_page(data)
 
     elif page == "💸 ঋণ প্রদান":
         loan_page(data)
