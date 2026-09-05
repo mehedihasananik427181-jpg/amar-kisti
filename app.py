@@ -12,7 +12,6 @@ ADMIN_USER = "admin"
 ADMIN_PASS = "somity2026"
 
 def load_data():
-    """ডেটাবেজ ফাইল থেকে নিরাপদ উপায়ে ডাটা লোড করার চূড়ান্ত ফাংশন"""
     try:
         if os.path.exists(DB_FILE):
             with open(DB_FILE, "r", encoding="utf-8") as file:
@@ -24,7 +23,6 @@ def load_data():
         return {"members": {}}
 
 def save_data(data):
-    """ডাটাবেজে তথ্য সেভ করার ফাংশন"""
     try:
         with open(DB_FILE, "w", encoding="utf-8") as file:
             json.dump(data, file, ensure_ascii=False, indent=4)
@@ -36,7 +34,7 @@ data = load_data()
 if "members" not in data:
     data["members"] = {}
 
-# সেশন স্টেট চেক (লগইন ট্র্যাকিং)
+# সেশন স্টেট চেক
 if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
 
@@ -59,11 +57,10 @@ if not st.session_state.logged_in:
             else:
                 st.error("❌ ভুল ইউজারনেম অথবা পাসওয়ার্ড!")
 
-# লগইন সফল হলে মূল অ্যাপ চালু হবে
+# লগইন সফল হলে মূল অ্যাপ
 else:
     st.sidebar.title("🎛️ কন্ট্রোল প্যানেল")
     
-    # লগআউট বাটন
     if st.sidebar.button("🔒 নিরাপদ লগআউট", type="primary"):
         st.session_state.logged_in = False
         st.rerun()
@@ -212,4 +209,6 @@ else:
             if not history:
                 st.info("এই সদস্যের কোনো লেনদেনের ইতিহাস পাওয়া যায়নি।")
             else:
-                for idx, log in enumerate(reversed(history), 1):
+                # কোনো লুপের ঝামেলা না রেখে সরাসরি মার্কডাউন স্টাইলে ইতিহাস প্রিন্ট করা
+                for log in reversed(history):
+                    st.markdown(f"📌 {log}")
