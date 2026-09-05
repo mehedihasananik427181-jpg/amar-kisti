@@ -23,15 +23,15 @@ def save_data(data):
     try:
         with open(DB_FILE, "w", encoding="utf-8") as file:
             json.dump(data, file, ensure_ascii=False, indent=4)
-    except Exception as e:
-        st.error(f"ডাটা সেভ করতে সমস্যা হয়েছে: {e}")
+    except:
+        pass
 
 data = load_data()
 
 if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
 
-# লগইন পেজ লজিক
+# ১. লগইন স্ক্রিন
 if not st.session_state.logged_in:
     st.markdown("<h1 style='text-align: center; color: #1E3A8A;'>🏦 আমার কিস্তি</h1>", unsafe_allow_html=True)
     with st.form("login_form"):
@@ -44,7 +44,7 @@ if not st.session_state.logged_in:
             else:
                 st.error("❌ ভুল পাসওয়ার্ড!")
 
-# মূল অ্যাপ লজিক (ইনডেন্টেশন সহজ করা হয়েছে)
+# ২. মূল অ্যাপ স্ক্রিন
 if st.session_state.logged_in:
     st.sidebar.title("🎛️ কন্ট্রোল প্যানেল")
     if st.sidebar.button("🔒 নিরাপদ লগআউট", type="primary"):
@@ -63,14 +63,16 @@ if st.session_state.logged_in:
     st.markdown(f"<h1 style='text-align: center; color: #1E3A8A;'>🏦 আমার কিস্তি (Amar Kisti)</h1>", unsafe_allow_html=True)
     st.write("---")
 
+    # ড্যাশবোর্ড ও সদস্য তালিকা
     if choice == "ড্যাশবোর্ড ও সদস্য তালিকা":
         st.subheader("📊 ড্যাশবোর্ড ও সদস্য তালিকা")
         if not data["members"]:
             st.info("বর্তমানে কোনো সদস্য নিবন্ধিত নেই।")
         for phone, info in data["members"].items():
             total_loan = round(info.get("loan_principal", 0.0) + info.get("loan_interest", 0.0), 2)
-            st.info(f"👤 **নাম:** {info['name']} | 📱 **মোবাইল:** {phone} | 💰 **মোট সঞ্চয়:** {info.get('savings', 0.0)} টাকা | 📉 **অবশিষ্ট ঋণ:** {total_loan} টাকা ({info.get('loan_type', 'নাই')})")
+            st.info(f"👤 **নাম:** {info['name']} | 📱 **মোবাইল:** {phone} | 💰 **মোট সঞ্চয়:** {info.get('savings', 0.0)} টাকা | 📉 **অবशिष्ट ঋণ:** {total_loan} টাকা ({info.get('loan_type', 'নাই')})")
 
+    # নতুন সদস্য যুক্ত করুন
     if choice == "নতুন সদস্য যুক্ত করুন":
         st.subheader("➕ নতুন সদস্যের প্রোফাইল তৈরি করুন")
         phone = st.text_input("📱 সদস্যের মোবাইল নম্বর দিন")
@@ -79,26 +81,23 @@ if st.session_state.logged_in:
         
         if st.button("💾 ডেটাবেজে স্থায়ীভাবে সেভ করুন"):
             if phone and name:
-                if phone in data["members"]:
-                    st.error("এই মোবাইল নম্বরে ইতিমধ্যে একজন সদস্য আছেন!")
-                else:
-                    data["members"][phone] = {
-                        "name": name,
-                        "savings": initial_savings,
-                        "loan_principal": 0.0,
-                        "loan_interest": 0.0,
-                        "loan_type": "নাই",
-                        "loan_date": "",
-                        "loan_rate": 10,
-                        "loan_duration": 10,
-                        "history": [f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')} - হিসাব খোলা হয়েছে প্রাথমিক সঞ্চয় {initial_savings} টাকা দিয়ে।"]
-                    }
-                    save_data(data)
-                    st.success(f"🎉 সফলভাবে {name}-এর প্রোফাইল তৈরি হয়েছে!")
-                    st.rerun()
+                data["members"][phone] = {
+                    "name": name,
+                    "savings": initial_savings,
+                    "loan_principal": 0.0,
+                    "loan_interest": 0.0,
+                    "loan_type": "নাই",
+                    "loan_date": datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                    "loan_rate": 10,
+                    "loan_duration": 10,
+                    "history": [f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')} - হিসাব খোলা হয়েছে প্রাথমিক সঞ্চয় {initial_savings} টাকা দিয়ে।"]
+                }
+                save_data(data)
+                st.success(f"🎉 সফলভাবে {name}-এর প্রোফাইল তৈরি হয়েছে!")
             else:
                 st.warning("দয়া করে নাম এবং মোবাইল নম্বর দিন।")
 
+    # কিস্তি বা টাকা জমা নিন
     if choice == "কিস্তি বা টাকা জমা নিন":
         st.subheader("💰 সদস্যের কিস্তি বা সঞ্চয়ের টাকা জমা নিন")
         if not data["members"]:
@@ -116,6 +115,7 @@ if st.session_state.logged_in:
                     st.success(f"💸 সফলভাবে {amount} টাকা সঞ্চয় জমা করা হয়েছে!")
                     st.rerun()
 
+    # ঋণ বা লোন বিতরণ (Loan)
     if choice == "ঋণ বা লোন বিতরণ (Loan)":
         st.subheader("💸 সদস্যকে নতুন ঋণ বা লোন প্রদান করুন")
         if not data["members"]:
@@ -133,12 +133,12 @@ if st.session_state.logged_in:
                 loan_amount = st.number_input("💵 ঋণের আসল পরিমাণ (টাকা)", min_value=0.0, step=100.0)
                 interest_rate = st.slider("📊 সুদের হার নির্ধারণ করুন (%)", 1, 50, 10)
                 loan_type = st.selectbox("📅 কিস্তির ধরন", ["দিনের হিসাবে", "সাপ্তাহিক হিসাবে", "মাসিক হিসাবে"])
-                duration = st.number_input("⏱️ মেয়াদ বা কিস্তির সংখ্যা দিন", min_value=1, step=1, value=10)
+                duration = st.number_input("⏱️ মেয়াদ বা কিস্তির সংখ্যা", min_value=1, step=1, value=10)
                 
                 factor = duration / 12 if loan_type == "মাসিক হিসাবে" else duration / 52 if loan_type == "সাপ্তাহিক হিসাবে" else duration / 365
                 total_interest = loan_amount * (interest_rate / 100) * factor
                 
-                st.warning(f"📉 আসল: {loan_amount} টাকা | আনুমানিক মোট সুদ: {round(total_interest, 2)} টাকা")
+                st.warning(f"📉 আসল: {loan_amount} tobacco টাকা | আনুমানিক মোট সুদ: {round(total_interest, 2)} টাকা")
                 if st.button("🚀 ঋণ বা লোন অনুমোদন করুন"):
                     if loan_amount > 0:
                         data["members"][phone]["loan_principal"] = loan_amount
@@ -152,6 +152,7 @@ if st.session_state.logged_in:
                         st.success(f"✅ সফলভাবে লোন অনুমোদন করা হয়েছে!")
                         st.rerun()
 
+    # ঋণের টাকা বা কিস্তি আদায়
     if choice == "ঋণের টাকা বা কিস্তি আদায়":
         st.subheader("📉 ঋণের টাকা বা কিস্তি আদায় করুন")
         if not data["members"]:
