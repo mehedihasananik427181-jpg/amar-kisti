@@ -13,7 +13,7 @@ def load_data():
         if os.path.exists(DB_FILE):
             with open(DB_FILE, "r", encoding="utf-8") as file:
                 data = json.load(file)
-                if isinstance(data, dict):
+                if isinstance(data, dict) and "members" in data:
                     return data
         return {"members": {}}
     except:
@@ -27,13 +27,11 @@ def save_data(data):
         st.error(f"ডাটা সেভ করতে সমস্যা হয়েছে: {e}")
 
 data = load_data()
-if "members" not in data:
-    data["members"] = {}
 
 if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
 
-# লগইন পেজ
+# লগইন পেজ লজিক
 if not st.session_state.logged_in:
     st.markdown("<h1 style='text-align: center; color: #1E3A8A;'>🏦 আমার কিস্তি</h1>", unsafe_allow_html=True)
     with st.form("login_form"):
@@ -46,8 +44,8 @@ if not st.session_state.logged_in:
             else:
                 st.error("❌ ভুল পাসওয়ার্ড!")
 
-# মূল অ্যাপ
-else:
+# মূল অ্যাপ লজিক (ইনডেন্টেশন সহজ করা হয়েছে)
+if st.session_state.logged_in:
     st.sidebar.title("🎛️ কন্ট্রোল প্যানেল")
     if st.sidebar.button("🔒 নিরাপদ লগআউট", type="primary"):
         st.session_state.logged_in = False
@@ -59,24 +57,21 @@ else:
         "কিস্তি বা টাকা জমা নিন",
         "ঋণ বা লোন বিতরণ (Loan)",
         "ঋণের টাকা বা কিস্তি আদায়",
-        "সদস্য স্টেটমেন্ট (Statement)"
+        "সদস্য স্টেটメント (Statement)"
     ])
 
     st.markdown(f"<h1 style='text-align: center; color: #1E3A8A;'>🏦 আমার কিস্তি (Amar Kisti)</h1>", unsafe_allow_html=True)
     st.write("---")
 
-    # ১. ড্যাশবোর্ড
     if choice == "ড্যাশবোর্ড ও সদস্য তালিকা":
         st.subheader("📊 ড্যাশবোর্ড ও সদস্য তালিকা")
         if not data["members"]:
             st.info("বর্তমানে কোনো সদস্য নিবন্ধিত নেই।")
-        else:
-            for phone, info in data["members"].items():
-                total_loan = round(info.get("loan_principal", 0.0) + info.get("loan_interest", 0.0), 2)
-                st.info(f"👤 **নাম:** {info['name']} | 📱 **মোবাইল:** {phone} | 💰 **মোট সঞ্চয়:** {info.get('savings', 0.0)} টাকা | 📉 **অবশিষ্ট ঋণ:** {total_loan} টাকা ({info.get('loan_type', 'নাই')})")
+        for phone, info in data["members"].items():
+            total_loan = round(info.get("loan_principal", 0.0) + info.get("loan_interest", 0.0), 2)
+            st.info(f"👤 **নাম:** {info['name']} | 📱 **মোবাইল:** {phone} | 💰 **মোট সঞ্চয়:** {info.get('savings', 0.0)} টাকা | 📉 **অবশিষ্ট ঋণ:** {total_loan} টাকা ({info.get('loan_type', 'নাই')})")
 
-    # ২. নতুন সদস্য
-    elif choice == "নতুন সদস্য যুক্ত করুন":
+    if choice == "নতুন সদস্য যুক্ত করুন":
         st.subheader("➕ নতুন সদস্যের প্রোফাইল তৈরি করুন")
         phone = st.text_input("📱 সদস্যের মোবাইল নম্বর দিন")
         name = st.text_input("✍️ সদস্যের পুরো নাম লিখুন")
@@ -94,15 +89,17 @@ else:
                         "loan_interest": 0.0,
                         "loan_type": "নাই",
                         "loan_date": "",
+                        "loan_rate": 10,
+                        "loan_duration": 10,
                         "history": [f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')} - হিসাব খোলা হয়েছে প্রাথমিক সঞ্চয় {initial_savings} টাকা দিয়ে।"]
                     }
                     save_data(data)
                     st.success(f"🎉 সফলভাবে {name}-এর প্রোফাইল তৈরি হয়েছে!")
+                    st.rerun()
             else:
                 st.warning("দয়া করে নাম এবং মোবাইল নম্বর দিন।")
 
-    # ৩. কিস্তি বা টাকা জমা
-    elif choice == "কিস্তি বা টাকা জমা নিন":
+    if choice == "কিস্তি বা টাকা জমা নিন":
         st.subheader("💰 সদস্যের কিস্তি বা সঞ্চয়ের টাকা জমা নিন")
         if not data["members"]:
             st.warning("কোনো সদস্য নেই।")
@@ -119,8 +116,7 @@ else:
                     st.success(f"💸 সফলভাবে {amount} টাকা সঞ্চয় জমা করা হয়েছে!")
                     st.rerun()
 
-    # ৪. ঋণ বিতরণ
-    elif choice == "ঋণ বা লোন বিতরণ (Loan)":
+    if choice == "ঋণ বা লোন বিতরণ (Loan)":
         st.subheader("💸 সদস্যকে নতুন ঋণ বা লোন প্রদান করুন")
         if not data["members"]:
             st.warning("কোনো সদস্য নেই।")
@@ -156,8 +152,7 @@ else:
                         st.success(f"✅ সফলভাবে লোন অনুমোদন করা হয়েছে!")
                         st.rerun()
 
-    # ৫. ঋণের টাকা আদায়
-    elif choice == "ঋণের টাকা বা কিস্তি আদায়":
+    if choice == "ঋণের টাকা বা কিস্তি আদায়":
         st.subheader("📉 ঋণের টাকা বা কিস্তি আদায় করুন")
         if not data["members"]:
             st.warning("কোনো সদস্য নেই।")
