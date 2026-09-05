@@ -1,15 +1,13 @@
-
 import os
 import json
-import math
-from datetime import datetime, date
+from datetime import datetime
 
-import streamlit as st
 import pandas as pd
+import streamlit as st
 
 
 # ============================================================
-# APP CONFIG
+# APP SETTINGS
 # ============================================================
 
 st.set_page_config(
@@ -18,61 +16,57 @@ st.set_page_config(
     layout="wide"
 )
 
-
-# ============================================================
-# LOGIN
-# ============================================================
+DB_FILE = "database.json"
 
 ADMIN_USER = "admin"
 ADMIN_PASS = "somity2026"
 
-DB_FILE = "database.json"
-
 
 # ============================================================
-# DATABASE FUNCTIONS
+# BASIC FUNCTIONS
 # ============================================================
 
 def now_string():
-    """Current date and time."""
     return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
 
-def load_data():
-    """Load database.json safely."""
+def parse_datetime(value):
+    if not value:
+        return None
+    try:
+        return datetime.strptime(value, "%Y-%m-%d %H:%M:%S")
+    except Exception:
+        return None
 
+
+def load_data():
     if not os.path.exists(DB_FILE):
         return {"members": {}}
 
     try:
-        with open(DB_FILE, "r", encoding="utf-8") as file:
-            data = json.load(file)
+        with open(DB_FILE, "r", encoding="utf-8") as f:
+            data = json.load(f)
 
-        if "members" not in data:
+        if not isinstance(data, dict):
+            data = {"members": {}}
+
+        if "members" not in data or not isinstance(data["members"], dict):
             data["members"] = {}
 
         return data
 
-    except Exception:
+    except Exception as e:
+        st.error(f"database.json পড়তে সমস্যা হয়েছে: {e}")
         return {"members": {}}
 
 
 def save_data(data):
-    """Save database.json."""
-
-    with open(DB_FILE, "w", encoding="utf-8") as file:
-        json.dump(
-            data,
-            file,
-            ensure_ascii=False,
-            indent=4
-        )
+    with open(DB_FILE, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=4)
 
 
 def add_history(member, message):
-    """Add timestamped history."""
-
-    if "history" not in member:
+    if "history" not in member or not isinstance(member["history"], list):
         member["history"] = []
 
     member["history"].append(
@@ -81,14 +75,8 @@ def add_history(member, message):
 
 
 def normalize_member(member):
-    """
-    Existing database.json members may not contain
-    the new loan-tracking fields.
-
-    This function adds missing fields automatically.
-    """
-
     defaults = {
+        "name": "",
         "savings": 0.0,
         "loan_principal": 0.0,
         "loan_interest": 0.0,
@@ -97,16 +85,24 @@ def normalize_member(member):
         "loan_rate": 0.0,
         "loan_duration": 0,
         "loan_duration_unit": "Months",
+
         "loan_installment": 0.0,
         "loan_total_payable": 0.0,
         "loan_total_paid": 0.0,
+
         "loan_principal_paid": 0.0,
         "loan_interest_paid": 0.0,
+
         "loan_remaining_principal": 0.0,
         "loan_remaining_interest": 0.0,
+
         "loan_active": False,
         "loan_settled": False,
+
         "loan_start_date": "",
+        "loan_last_payment_date": "",
+
+        "loan_next_installment": 1,
         "loan_payments": [],
         "history": []
     }
@@ -115,81 +111,90 @@ def normalize_member(member):
         if key not in member:
             member[key] = value
 
+    if not isinstance(member["loan_payments"], list):
+        member["loan_payments"] = []
+
+    if not isinstance(member["history"], list):
+        member["history"] = []
+
+    # Compatibility with the old database structure.
+    if (
+        float(member.get("loan_principal", 0)) > 0
+        and not member.get("loan_remaining_principal")
+        and member.get("loan_active") is not False
+    ):
+        member["loan_remaining_principal"] = float(
+            member.get("loan_principal", 0)
+        )
+
+    if not member.get("loan_start_date"):
+        member["loan_start_date"] = member.get("loan_date", "")
+
+    if not member.get("loan_last_payment_date"):
+        member["loan_last_payment_date"] = member.get(
+            "loan_start_date",
+            member.get("loan_date", "")
+        )
+
     return member
 
 
 def prepare_database(data):
-    """Normalize all members."""
-
     for member_id in data["members"]:
         data["members"][member_id] = normalize_member(
             data["members"][member_id]
         )
-
     return data
 
 
 # ============================================================
-# LOAN CALCULATION FUNCTIONS
+# LOAN CALCULATION
 # ============================================================
 
-def get_periods_per_year(unit):
-    """Number of installment periods in one year."""
-
+def periods_per_year(unit):
     if unit == "Days":
         return 365
-
     if unit == "Weeks":
         return 52
-
     return 12
 
 
+def periodic_rate(annual_rate, unit):
+    return (float(annual_rate) / 100) / periods_per_year(unit)
+
+
 def calculate_emi(principal, annual_rate, duration, unit):
-    """
-    Reducing Balance EMI.
-
-    annual_rate = annual interest percentage.
-
-    Example:
-    Principal = 100000
-    Annual rate = 10%
-    Duration = 10 Months
-    """
+    principal = float(principal)
+    annual_rate = float(annual_rate)
+    duration = int(duration)
 
     if principal <= 0 or duration <= 0:
         return 0.0
 
-    if annual_rate <= 0:
-        return principal / duration
+    rate = periodic_rate(annual_rate, unit)
 
-    periods_per_year = get_periods_per_year(unit)
-
-    periodic_rate = (annual_rate / 100) / periods_per_year
-
-    if periodic_rate == 0:
-        return principal / duration
+    if rate == 0:
+        return round(principal / duration, 2)
 
     emi = (
         principal
-        * periodic_rate
-        * ((1 + periodic_rate) ** duration)
-        / (((1 + periodic_rate) ** duration) - 1)
+        * rate
+        * (1 + rate) ** duration
+        / ((1 + rate) ** duration - 1)
     )
 
     return round(emi, 2)
 
 
-def calculate_loan_schedule(
-    principal,
-    annual_rate,
-    duration,
-    unit
-):
-    """
-    Generate complete reducing-balance loan schedule.
-    """
+def build_schedule(principal, annual_rate, duration, unit):
+    principal = float(principal)
+    annual_rate = float(annual_rate)
+    duration = int(duration)
 
+    if principal <= 0 or duration <= 0:
+        return []
+
+    rate = periodic_rate(annual_rate, unit)
     emi = calculate_emi(
         principal,
         annual_rate,
@@ -197,183 +202,126 @@ def calculate_loan_schedule(
         unit
     )
 
-    periods_per_year = get_periods_per_year(unit)
-
-    periodic_rate = (
-        annual_rate / 100 / periods_per_year
-    )
-
-    balance = float(principal)
-
+    balance = principal
     schedule = []
 
-    for period in range(1, duration + 1):
-
-        if balance <= 0:
+    for number in range(1, duration + 1):
+        if balance <= 0.005:
             break
 
-        if periodic_rate > 0:
-            interest = balance * periodic_rate
-        else:
-            interest = 0
-
+        interest = balance * rate
         principal_part = emi - interest
 
-        # Last installment adjustment
         if principal_part > balance:
             principal_part = balance
-            payment = principal_part + interest
-        else:
-            payment = emi
 
-        ending_balance = balance - principal_part
-
-        if ending_balance < 0:
-            ending_balance = 0
+        payment = principal_part + interest
+        closing = max(0.0, balance - principal_part)
 
         schedule.append({
-            "period": period,
+            "installment": number,
             "opening_balance": round(balance, 2),
             "interest": round(interest, 2),
             "principal": round(principal_part, 2),
             "payment": round(payment, 2),
-            "closing_balance": round(ending_balance, 2)
+            "closing_balance": round(closing, 2)
         })
 
-        balance = ending_balance
+        balance = closing
 
     return schedule
 
 
-def calculate_elapsed_days(start_date_string):
-    """Calculate elapsed days from loan start."""
+def days_since(value):
+    dt = parse_datetime(value)
 
-    if not start_date_string:
+    if dt is None:
         return 0
 
-    try:
-        start = datetime.strptime(
-            start_date_string,
-            "%Y-%m-%d %H:%M:%S"
-        )
-
-        elapsed = (
-            datetime.now() - start
-        ).total_seconds() / 86400
-
-        return max(0, int(elapsed))
-
-    except Exception:
-        return 0
+    return max(
+        0,
+        (datetime.now() - dt).days
+    )
 
 
-def calculate_fair_settlement(member):
+def fair_early_settlement(member):
     """
-    Early Settlement Logic.
-
-    We do NOT charge future/unearned interest.
-
-    The settlement interest is based on elapsed days
-    and current outstanding principal.
-
-    Therefore the member receives a fair discount because
-    future scheduled interest is waived.
+    Early settlement:
+    - Full outstanding principal is payable.
+    - Only interest accrued since the last payment is charged.
+    - Future scheduled interest is waived.
     """
 
     principal = float(
         member.get("loan_remaining_principal", 0)
+    )
+
+    scheduled_interest = float(
+        member.get("loan_remaining_interest", 0)
     )
 
     annual_rate = float(
         member.get("loan_rate", 0)
     )
 
-    if principal <= 0:
-        return {
-            "principal": 0.0,
-            "interest": 0.0,
-            "total": 0.0,
-            "future_interest_discount": 0.0
-        }
-
-    start_date = member.get(
-        "loan_start_date",
-        member.get("loan_date", "")
+    last_payment_date = member.get(
+        "loan_last_payment_date",
+        member.get("loan_start_date", "")
     )
 
-    elapsed_days = calculate_elapsed_days(
-        start_date
-    )
+    elapsed = days_since(last_payment_date)
 
-    # Daily reducing-balance accrued interest.
     accrued_interest = (
         principal
         * (annual_rate / 100)
-        * (elapsed_days / 365)
+        * (elapsed / 365)
     )
 
     accrued_interest = round(
-        max(0, accrued_interest),
+        max(0.0, accrued_interest),
         2
     )
 
-    # Scheduled remaining interest
-    scheduled_remaining_interest = float(
-        member.get("loan_remaining_interest", 0)
+    # Never charge more than the remaining scheduled interest.
+    fair_interest = min(
+        accrued_interest,
+        scheduled_interest
     )
 
-    # Future interest waived.
+    fair_interest = round(
+        max(0.0, fair_interest),
+        2
+    )
+
     discount = max(
-        0,
-        scheduled_remaining_interest - accrued_interest
+        0.0,
+        scheduled_interest - fair_interest
     )
 
-    total = principal + accrued_interest
+    total = principal + fair_interest
 
     return {
         "principal": round(principal, 2),
-        "interest": round(accrued_interest, 2),
-        "total": round(total, 2),
-        "future_interest_discount": round(discount, 2),
-        "elapsed_days": elapsed_days
-    }
-
-
-def current_loan_status(member):
-    """Calculate current loan information."""
-
-    principal = float(
-        member.get("loan_remaining_principal", 0)
-    )
-
-    interest = float(
-        member.get("loan_remaining_interest", 0)
-    )
-
-    return {
-        "principal": round(principal, 2),
-        "interest": round(interest, 2),
-        "total": round(principal + interest, 2)
+        "scheduled_interest": round(scheduled_interest, 2),
+        "fair_interest": round(fair_interest, 2),
+        "discount": round(discount, 2),
+        "elapsed_days": elapsed,
+        "total": round(total, 2)
     }
 
 
 # ============================================================
-# LOGIN PAGE
+# LOGIN
 # ============================================================
 
 def login_page():
+    st.title("💰 আমার সমিতি")
+    st.subheader("🔐 Admin Login")
 
-    st.title("🔐 আমার সমিতি")
-    st.subheader("Admin Login")
+    left, center, right = st.columns([1, 2, 1])
 
-    col1, col2, col3 = st.columns([1, 2, 1])
-
-    with col2:
-
-        username = st.text_input(
-            "Username"
-        )
-
+    with center:
+        username = st.text_input("Username")
         password = st.text_input(
             "Password",
             type="password"
@@ -384,18 +332,14 @@ def login_page():
             type="primary",
             use_container_width=True
         ):
-
             if (
                 username == ADMIN_USER
                 and password == ADMIN_PASS
             ):
                 st.session_state["logged_in"] = True
                 st.rerun()
-
             else:
-                st.error(
-                    "Username অথবা Password ভুল।"
-                )
+                st.error("Username অথবা Password ভুল।")
 
 
 # ============================================================
@@ -403,8 +347,7 @@ def login_page():
 # ============================================================
 
 def dashboard_page(data):
-
-    st.title("🏠 Dashboard")
+    st.title("🏠 ড্যাশবোর্ড")
 
     members = data["members"]
 
@@ -415,77 +358,74 @@ def dashboard_page(data):
         for m in members.values()
     )
 
-    active_loans = [
+    active_members = [
         m for m in members.values()
         if m.get("loan_active", False)
     ]
 
-    total_loan = sum(
+    total_principal = sum(
         float(m.get("loan_remaining_principal", 0))
-        for m in active_loans
+        for m in active_members
     )
 
     total_interest = sum(
         float(m.get("loan_remaining_interest", 0))
-        for m in active_loans
+        for m in active_members
     )
 
-    col1, col2, col3, col4 = st.columns(4)
+    c1, c2, c3, c4 = st.columns(4)
 
-    col1.metric(
+    c1.metric(
         "মোট সদস্য",
         total_members
     )
 
-    col2.metric(
+    c2.metric(
         "মোট সঞ্চয়",
         f"৳ {total_savings:,.2f}"
     )
 
-    col3.metric(
-        "চলমান ঋণ",
-        f"৳ {total_loan:,.2f}"
+    c3.metric(
+        "বাকি ঋণের মূলধন",
+        f"৳ {total_principal:,.2f}"
     )
 
-    col4.metric(
+    c4.metric(
         "বাকি Interest",
         f"৳ {total_interest:,.2f}"
     )
 
     st.divider()
 
-    if members:
+    if not members:
+        st.info("এখনো কোনো সদস্য যোগ করা হয়নি।")
+        return
 
-        rows = []
+    rows = []
 
-        for member_id, member in members.items():
-
-            status = (
+    for member_id, member in members.items():
+        rows.append({
+            "সদস্য ID": member_id,
+            "নাম": member.get("name", ""),
+            "সঞ্চয়": float(member.get("savings", 0)),
+            "বাকি মূলধন": float(
+                member.get("loan_remaining_principal", 0)
+            ),
+            "বাকি Interest": float(
+                member.get("loan_remaining_interest", 0)
+            ),
+            "ঋণ Status": (
                 "চলমান"
-                if member.get("loan_active")
+                if member.get("loan_active", False)
                 else "নাই"
             )
+        })
 
-            rows.append({
-                "Member ID": member_id,
-                "নাম": member.get("name", ""),
-                "সঞ্চয়": member.get("savings", 0),
-                "ঋণের মূলধন": member.get(
-                    "loan_remaining_principal",
-                    0
-                ),
-                "বাকি Interest": member.get(
-                    "loan_remaining_interest",
-                    0
-                ),
-                "ঋণ Status": status
-            })
-
-        st.dataframe(
-            pd.DataFrame(rows),
-            use_container_width=True,
-            hide_index=True
-        )
+    st.dataframe(
+        pd.DataFrame(rows),
+        use_container_width=True,
+        hide_index=True
+    )
 
 
 # ============================================================
@@ -493,25 +433,23 @@ def dashboard_page(data):
 # ============================================================
 
 def member_page(data):
-
     st.title("👥 সদস্য ব্যবস্থাপনা")
 
     tab1, tab2 = st.tabs([
-        "নতুন সদস্য",
-        "সদস্য তালিকা"
+        "➕ নতুন সদস্য",
+        "📋 সদস্য তালিকা"
     ])
 
     with tab1:
-
         member_id = st.text_input(
-            "মোবাইল / সদস্য ID"
-        )
+            "সদস্য ID / মোবাইল নম্বর"
+        ).strip()
 
         name = st.text_input(
             "সদস্যের নাম"
-        )
+        ).strip()
 
-        initial_savings = st.number_input(
+        savings = st.number_input(
             "প্রাথমিক সঞ্চয়",
             min_value=0.0,
             step=100.0
@@ -521,58 +459,61 @@ def member_page(data):
             "সদস্য যোগ করুন",
             type="primary"
         ):
-
-            member_id = member_id.strip()
-
             if not member_id:
                 st.error("সদস্য ID দিন।")
+                return
 
-            elif not name.strip():
+            if not name:
                 st.error("সদস্যের নাম দিন।")
+                return
 
-            elif member_id in data["members"]:
-                st.error(
-                    "এই সদস্য ইতিমধ্যে আছে।"
-                )
+            if member_id in data["members"]:
+                st.error("এই সদস্য ইতিমধ্যে আছে।")
+                return
 
-            else:
+            timestamp = now_string()
 
-                timestamp = now_string()
+            data["members"][member_id] = {
+                "name": name,
+                "savings": float(savings),
 
-                data["members"][member_id] = {
-                    "name": name.strip(),
-                    "savings": float(initial_savings),
-                    "loan_principal": 0.0,
-                    "loan_interest": 0.0,
-                    "loan_type": "নাই",
-                    "loan_date": "",
-                    "loan_rate": 0.0,
-                    "loan_duration": 0,
-                    "loan_duration_unit": "Months",
-                    "loan_installment": 0.0,
-                    "loan_total_payable": 0.0,
-                    "loan_total_paid": 0.0,
-                    "loan_principal_paid": 0.0,
-                    "loan_interest_paid": 0.0,
-                    "loan_remaining_principal": 0.0,
-                    "loan_remaining_interest": 0.0,
-                    "loan_active": False,
-                    "loan_settled": False,
-                    "loan_start_date": timestamp,
-                    "loan_payments": [],
-                    "history": [
-                        f"{timestamp} - হিসাব খোলা হয়েছে।"
-                    ]
-                }
+                "loan_principal": 0.0,
+                "loan_interest": 0.0,
+                "loan_type": "নাই",
+                "loan_date": "",
+                "loan_rate": 0.0,
+                "loan_duration": 0,
+                "loan_duration_unit": "Months",
 
-                save_data(data)
+                "loan_installment": 0.0,
+                "loan_total_payable": 0.0,
+                "loan_total_paid": 0.0,
+                "loan_principal_paid": 0.0,
+                "loan_interest_paid": 0.0,
 
-                st.success(
-                    "সদস্য সফলভাবে যোগ হয়েছে।"
-                )
+                "loan_remaining_principal": 0.0,
+                "loan_remaining_interest": 0.0,
+
+                "loan_active": False,
+                "loan_settled": False,
+
+                "loan_start_date": timestamp,
+                "loan_last_payment_date": timestamp,
+                "loan_next_installment": 1,
+
+                "loan_payments": [],
+
+                "history": [
+                    f"{timestamp} - হিসাব খোলা হয়েছে।"
+                ]
+            }
+
+            save_data(data)
+
+            st.success("সদস্য সফলভাবে যোগ হয়েছে।")
+            st.rerun()
 
     with tab2:
-
         if not data["members"]:
             st.info("কোনো সদস্য নেই।")
             return
@@ -580,18 +521,16 @@ def member_page(data):
         rows = []
 
         for member_id, member in data["members"].items():
-
             rows.append({
-                "ID": member_id,
+                "সদস্য ID": member_id,
                 "নাম": member.get("name", ""),
-                "সঞ্চয়": member.get("savings", 0),
-                "Loan": member.get(
-                    "loan_remaining_principal",
-                    0
+                "সঞ্চয়": float(member.get("savings", 0)),
+                "বাকি ঋণ": float(
+                    member.get("loan_remaining_principal", 0)
                 ),
                 "Status": (
                     "চলমান"
-                    if member.get("loan_active")
+                    if member.get("loan_active", False)
                     else "নাই"
                 )
             })
@@ -604,11 +543,10 @@ def member_page(data):
 
 
 # ============================================================
-# SAVINGS PAGE
+# SAVINGS
 # ============================================================
 
 def savings_page(data):
-
     st.title("💰 সঞ্চয় জমা / উত্তোলন")
 
     if not data["members"]:
@@ -624,13 +562,16 @@ def savings_page(data):
 
     member = data["members"][member_id]
 
+    current_savings = float(
+        member.get("savings", 0)
+    )
+
     st.info(
-        f"বর্তমান সঞ্চয়: "
-        f"৳ {float(member.get('savings', 0)):,.2f}"
+        f"বর্তমান সঞ্চয়: ৳ {current_savings:,.2f}"
     )
 
     transaction_type = st.radio(
-        "Transaction Type",
+        "Transaction",
         ["জমা", "উত্তোলন"],
         horizontal=True
     )
@@ -641,47 +582,34 @@ def savings_page(data):
         step=100.0
     )
 
-    note = st.text_input(
-        "নোট",
-        placeholder="যেমন: মাসিক সঞ্চয়"
-    )
+    note = st.text_input("নোট")
 
     if st.button(
         "Transaction সম্পন্ন করুন",
         type="primary"
     ):
-
         if amount <= 0:
             st.error("টাকার পরিমাণ দিন।")
             return
 
         if (
             transaction_type == "উত্তোলন"
-            and amount > float(member.get("savings", 0))
+            and amount > current_savings
         ):
-            st.error(
-                "পর্যাপ্ত সঞ্চয় নেই।"
-            )
+            st.error("পর্যাপ্ত সঞ্চয় নেই।")
             return
 
         if transaction_type == "জমা":
-
             member["savings"] = (
-                float(member.get("savings", 0))
-                + amount
+                current_savings + amount
             )
-
             message = (
                 f"সঞ্চয় জমা: ৳ {amount:,.2f}"
             )
-
         else:
-
             member["savings"] = (
-                float(member.get("savings", 0))
-                - amount
+                current_savings - amount
             )
-
             message = (
                 f"সঞ্চয় উত্তোলন: ৳ {amount:,.2f}"
             )
@@ -693,19 +621,15 @@ def savings_page(data):
 
         save_data(data)
 
-        st.success(
-            "Transaction সফল হয়েছে।"
-        )
-
+        st.success("Transaction সফল হয়েছে।")
         st.rerun()
 
 
 # ============================================================
-# LOAN DISBURSEMENT PAGE
+# LOAN DISBURSEMENT
 # ============================================================
 
 def loan_page(data):
-
     st.title("🏦 ঋণ প্রদান")
 
     if not data["members"]:
@@ -722,34 +646,14 @@ def loan_page(data):
     member = data["members"][member_id]
 
     if member.get("loan_active", False):
-
         st.error(
-            "এই সদস্যের একটি চলমান ঋণ আছে। "
-            "নতুন ঋণ দেওয়ার আগে পুরোনো ঋণ সম্পন্ন করুন।"
+            "এই সদস্যের একটি চলমান ঋণ আছে।"
         )
-
-        status = current_loan_status(member)
-
-        st.write(
-            f"বর্তমান বাকি মূলধন: "
-            f"৳ {status['principal']:,.2f}"
-        )
-
-        st.write(
-            f"বর্তমান বাকি Interest: "
-            f"৳ {status['interest']:,.2f}"
-        )
-
         return
 
-    st.subheader(
-        f"সদস্য: {member.get('name', '')}"
-    )
+    c1, c2 = st.columns(2)
 
-    col1, col2 = st.columns(2)
-
-    with col1:
-
+    with c1:
         principal = st.number_input(
             "ঋণের পরিমাণ",
             min_value=0.0,
@@ -769,8 +673,7 @@ def loan_page(data):
             value="সাধারণ ঋণ"
         )
 
-    with col2:
-
+    with c2:
         duration = st.number_input(
             "ঋণের মেয়াদ",
             min_value=1,
@@ -789,57 +692,52 @@ def loan_page(data):
             }[x]
         )
 
-    emi = calculate_emi(
+    schedule = build_schedule(
         principal,
         annual_rate,
         duration,
         duration_unit
     )
 
-    schedule = calculate_loan_schedule(
+    installment = calculate_emi(
         principal,
         annual_rate,
         duration,
         duration_unit
     )
 
-    total_payable = sum(
-        item["payment"]
-        for item in schedule
+    total_payable = round(
+        sum(row["payment"] for row in schedule),
+        2
     )
 
-    total_interest = (
-        total_payable - principal
+    total_interest = round(
+        total_payable - float(principal),
+        2
     )
 
-    st.divider()
+    c1, c2, c3 = st.columns(3)
 
-    col1, col2, col3 = st.columns(3)
-
-    col1.metric(
+    c1.metric(
         "প্রতি কিস্তি",
-        f"৳ {emi:,.2f}"
+        f"৳ {installment:,.2f}"
     )
 
-    col2.metric(
+    c2.metric(
         "মোট Interest",
         f"৳ {total_interest:,.2f}"
     )
 
-    col3.metric(
+    c3.metric(
         "মোট পরিশোধ",
         f"৳ {total_payable:,.2f}"
     )
 
     if schedule:
-
         with st.expander(
-            "📊 Reducing Balance Loan Schedule দেখুন"
+            "📊 Reducing Balance Schedule"
         ):
-
-            schedule_df = pd.DataFrame(
-                schedule
-            )
+            schedule_df = pd.DataFrame(schedule)
 
             schedule_df.columns = [
                 "কিস্তি",
@@ -861,99 +759,68 @@ def loan_page(data):
         type="primary",
         use_container_width=True
     ):
-
         if principal <= 0:
-            st.error(
-                "ঋণের পরিমাণ দিন।"
-            )
+            st.error("ঋণের পরিমাণ দিন।")
             return
 
         if duration <= 0:
-            st.error(
-                "মেয়াদ সঠিকভাবে দিন।"
-            )
+            st.error("মেয়াদ সঠিকভাবে দিন।")
             return
 
         timestamp = now_string()
 
-        member["loan_principal"] = float(
-            principal
-        )
-
-        member["loan_interest"] = float(
-            total_interest
-        )
-
+        member["loan_principal"] = float(principal)
+        member["loan_interest"] = float(total_interest)
         member["loan_type"] = (
             loan_type.strip()
             if loan_type.strip()
             else "সাধারণ ঋণ"
         )
-
         member["loan_date"] = timestamp
         member["loan_start_date"] = timestamp
-        member["loan_rate"] = float(
-            annual_rate
-        )
+        member["loan_last_payment_date"] = timestamp
 
-        member["loan_duration"] = int(
-            duration
-        )
+        member["loan_rate"] = float(annual_rate)
+        member["loan_duration"] = int(duration)
+        member["loan_duration_unit"] = duration_unit
 
-        member["loan_duration_unit"] = (
-            duration_unit
-        )
-
-        member["loan_installment"] = float(
-            emi
-        )
-
-        member["loan_total_payable"] = float(
-            total_payable
-        )
-
+        member["loan_installment"] = float(installment)
+        member["loan_total_payable"] = float(total_payable)
         member["loan_total_paid"] = 0.0
+
         member["loan_principal_paid"] = 0.0
         member["loan_interest_paid"] = 0.0
 
-        member["loan_remaining_principal"] = (
-            float(principal)
-        )
-
-        member["loan_remaining_interest"] = (
-            float(total_interest)
-        )
+        member["loan_remaining_principal"] = float(principal)
+        member["loan_remaining_interest"] = float(total_interest)
 
         member["loan_active"] = True
         member["loan_settled"] = False
+
+        member["loan_next_installment"] = 1
         member["loan_payments"] = []
 
         add_history(
             member,
             (
                 f"ঋণ প্রদান: ৳ {principal:,.2f} | "
-                f"Rate: {annual_rate}% | "
-                f"মেয়াদ: {duration} "
-                f"{duration_unit} | "
-                f"কিস্তি: ৳ {emi:,.2f}"
+                f"Interest Rate: {annual_rate}% | "
+                f"মেয়াদ: {duration} {duration_unit} | "
+                f"কিস্তি: ৳ {installment:,.2f}"
             )
         )
 
         save_data(data)
 
-        st.success(
-            "ঋণ সফলভাবে প্রদান করা হয়েছে।"
-        )
-
+        st.success("ঋণ সফলভাবে প্রদান করা হয়েছে।")
         st.rerun()
 
 
 # ============================================================
-# LOAN COLLECTION PAGE
+# LOAN COLLECTION
 # ============================================================
 
 def collection_page(data):
-
     st.title("💳 ঋণের টাকা বা কিস্তি আদায়")
 
     active_members = {
@@ -963,9 +830,7 @@ def collection_page(data):
     }
 
     if not active_members:
-        st.info(
-            "বর্তমানে কোনো চলমান ঋণ নেই।"
-        )
+        st.info("বর্তমানে কোনো চলমান ঋণ নেই।")
         return
 
     member_id = st.selectbox(
@@ -977,27 +842,33 @@ def collection_page(data):
 
     member = active_members[member_id]
 
-    status = current_loan_status(member)
-
-    st.subheader(
-        f"👤 {member.get('name', '')}"
+    principal_remaining = float(
+        member.get("loan_remaining_principal", 0)
     )
 
-    col1, col2, col3 = st.columns(3)
+    interest_remaining = float(
+        member.get("loan_remaining_interest", 0)
+    )
 
-    col1.metric(
+    total_remaining = (
+        principal_remaining + interest_remaining
+    )
+
+    c1, c2, c3 = st.columns(3)
+
+    c1.metric(
         "বাকি মূলধন",
-        f"৳ {status['principal']:,.2f}"
+        f"৳ {principal_remaining:,.2f}"
     )
 
-    col2.metric(
+    c2.metric(
         "বাকি Interest",
-        f"৳ {status['interest']:,.2f}"
+        f"৳ {interest_remaining:,.2f}"
     )
 
-    col3.metric(
+    c3.metric(
         "মোট বাকি",
-        f"৳ {status['total']:,.2f}"
+        f"৳ {total_remaining:,.2f}"
     )
 
     st.divider()
@@ -1008,14 +879,8 @@ def collection_page(data):
     )
 
     st.write(
-        f"Rate: "
-        f"{float(member.get('loan_rate', 0))}%"
-    )
-
-    st.write(
-        f"মেয়াদ: "
-        f"{member.get('loan_duration', 0)} "
-        f"{member.get('loan_duration_unit', '')}"
+        f"পরবর্তী কিস্তি: "
+        f"{int(member.get('loan_next_installment', 1))}"
     )
 
     payment_amount = st.number_input(
@@ -1024,8 +889,8 @@ def collection_page(data):
         step=100.0
     )
 
-    payment_note = st.text_input(
-        "আদায়ের নোট",
+    note = st.text_input(
+        "নোট",
         placeholder="যেমন: ১ম কিস্তি"
     )
 
@@ -1034,80 +899,119 @@ def collection_page(data):
         type="primary",
         use_container_width=True
     ):
-
         if payment_amount <= 0:
-            st.error(
-                "আদায়ের পরিমাণ দিন।"
-            )
+            st.error("আদায়ের পরিমাণ দিন।")
             return
 
-        total_remaining = (
-            status["principal"]
-            + status["interest"]
-        )
-
-        if payment_amount > total_remaining:
+        if payment_amount > total_remaining + 0.01:
             st.error(
                 f"সর্বোচ্চ ৳ {total_remaining:,.2f} "
                 f"আদায় করা যাবে।"
             )
             return
 
-        # ----------------------------------------------------
-        # Payment allocation:
-        # First interest, then principal.
-        # ----------------------------------------------------
-
-        remaining_payment = float(
-            payment_amount
+        unit = member.get(
+            "loan_duration_unit",
+            "Months"
         )
 
+        annual_rate = float(
+            member.get("loan_rate", 0)
+        )
+
+        rate = periodic_rate(
+            annual_rate,
+            unit
+        )
+
+        # Current reducing-balance period interest.
+        period_interest = round(
+            principal_remaining * rate,
+            2
+        )
+
+        # Never exceed remaining scheduled interest.
+        period_interest = min(
+            period_interest,
+            interest_remaining
+        )
+
+        # Payment first covers current period interest,
+        # then reduces principal.
         interest_paid = min(
-            remaining_payment,
-            status["interest"]
+            float(payment_amount),
+            period_interest
         )
 
-        remaining_payment -= interest_paid
+        principal_paid = max(
+            0.0,
+            float(payment_amount) - interest_paid
+        )
 
         principal_paid = min(
-            remaining_payment,
-            status["principal"]
+            principal_paid,
+            principal_remaining
         )
 
-        member["loan_interest_paid"] = (
-            float(member.get("loan_interest_paid", 0))
-            + interest_paid
+        # If a tiny rounding amount remains, add it to interest.
+        allocated = interest_paid + principal_paid
+
+        if allocated < payment_amount:
+            extra = payment_amount - allocated
+            interest_paid += extra
+
+        new_principal = max(
+            0.0,
+            principal_remaining - principal_paid
         )
 
-        member["loan_principal_paid"] = (
-            float(member.get("loan_principal_paid", 0))
-            + principal_paid
-        )
-
-        member["loan_total_paid"] = (
-            float(member.get("loan_total_paid", 0))
-            + payment_amount
-        )
-
-        member["loan_remaining_interest"] = max(
-            0,
-            status["interest"] - interest_paid
-        )
-
-        member["loan_remaining_principal"] = max(
-            0,
-            status["principal"] - principal_paid
+        new_interest = max(
+            0.0,
+            interest_remaining - interest_paid
         )
 
         timestamp = now_string()
 
+        member["loan_remaining_principal"] = round(
+            new_principal,
+            2
+        )
+
+        member["loan_remaining_interest"] = round(
+            new_interest,
+            2
+        )
+
+        member["loan_total_paid"] = round(
+            float(member.get("loan_total_paid", 0))
+            + float(payment_amount),
+            2
+        )
+
+        member["loan_principal_paid"] = round(
+            float(member.get("loan_principal_paid", 0))
+            + principal_paid,
+            2
+        )
+
+        member["loan_interest_paid"] = round(
+            float(member.get("loan_interest_paid", 0))
+            + interest_paid,
+            2
+        )
+
+        member["loan_last_payment_date"] = timestamp
+
         payment_record = {
             "date": timestamp,
-            "amount": round(payment_amount, 2),
+            "amount": round(float(payment_amount), 2),
             "interest_paid": round(interest_paid, 2),
             "principal_paid": round(principal_paid, 2),
             "type": "কিস্তি / আদায়",
-            "note": payment_note.strip()
+            "installment": int(
+                member.get("loan_next_installment", 1)
+            ),
+            "note": note.strip()
         }
 
         if "loan_payments" not in member:
@@ -1124,19 +1028,21 @@ def collection_page(data):
                 f"Interest: ৳ {interest_paid:,.2f} | "
                 f"মূলধন: ৳ {principal_paid:,.2f}"
                 + (
-                    f" | {payment_note.strip()}"
-                    if payment_note.strip()
+                    f" | {note.strip()}"
+                    if note.strip()
                     else ""
                 )
             )
         )
 
-        # Loan completed
+        member["loan_next_installment"] = int(
+            member.get("loan_next_installment", 1)
+        ) + 1
+
         if (
             member["loan_remaining_principal"] <= 0.01
             and member["loan_remaining_interest"] <= 0.01
         ):
-
             member["loan_remaining_principal"] = 0.0
             member["loan_remaining_interest"] = 0.0
             member["loan_active"] = False
@@ -1149,98 +1055,92 @@ def collection_page(data):
 
         save_data(data)
 
-        st.success(
-            "কিস্তি/টাকা সফলভাবে আদায় হয়েছে।"
-        )
-
+        st.success("কিস্তি/টাকা সফলভাবে আদায় হয়েছে।")
         st.rerun()
 
-    # --------------------------------------------------------
+    # ========================================================
     # EARLY SETTLEMENT
-    # --------------------------------------------------------
+    # ========================================================
 
     st.divider()
+    st.subheader("⚡ Early Settlement")
 
-    st.subheader(
-        "⚡ Early Settlement"
-    )
+    settlement = fair_early_settlement(member)
 
-    settlement = calculate_fair_settlement(
-        member
-    )
+    c1, c2, c3 = st.columns(3)
 
-    st.write(
-        f"Elapsed Days: "
-        f"**{settlement['elapsed_days']} দিন**"
-    )
-
-    col1, col2, col3 = st.columns(3)
-
-    col1.metric(
-        "মূলধন",
+    c1.metric(
+        "Outstanding Principal",
         f"৳ {settlement['principal']:,.2f}"
     )
 
-    col2.metric(
+    c2.metric(
         "Fair Interest",
-        f"৳ {settlement['interest']:,.2f}"
+        f"৳ {settlement['fair_interest']:,.2f}"
     )
 
-    col3.metric(
+    c3.metric(
         "Settlement Amount",
         f"৳ {settlement['total']:,.2f}"
     )
 
-    st.info(
-        "Early Settlement করলে ভবিষ্যতের অনর্জিত "
-        "scheduled interest নেওয়া হবে না। "
-        "শুধু outstanding principal এবং elapsed-days "
-        "অনুযায়ী fair interest নেওয়া হবে।"
+    st.write(
+        f"শেষ transaction থেকে অতিবাহিত দিন: "
+        f"**{settlement['elapsed_days']} দিন**"
     )
 
     st.success(
         f"Future Interest Discount: "
-        f"৳ {settlement['future_interest_discount']:,.2f}"
+        f"৳ {settlement['discount']:,.2f}"
+    )
+
+    st.caption(
+        "Early Settlement-এ ভবিষ্যতের scheduled interest "
+        "নেওয়া হবে না; outstanding principal এবং "
+        "শেষ payment-এর পর বাস্তবে accrued হওয়া fair interest "
+        "ধরা হবে।"
     )
 
     confirm = st.checkbox(
-        "আমি Early Settlement-এর হিসাব বুঝেছি এবং ঋণটি সম্পূর্ণ বন্ধ করতে চাই।"
+        "আমি settlement amount দেখে ঋণটি সম্পূর্ণ বন্ধ করতে চাই।"
     )
 
     if confirm:
-
         if st.button(
             "⚡ Early Settlement করুন",
             type="secondary",
             use_container_width=True
         ):
-
             settlement_amount = settlement["total"]
-
-            principal = settlement["principal"]
-            fair_interest = settlement["interest"]
+            principal_paid = settlement["principal"]
+            interest_paid = settlement["fair_interest"]
 
             timestamp = now_string()
 
-            member["loan_total_paid"] = (
+            member["loan_total_paid"] = round(
                 float(member.get("loan_total_paid", 0))
-                + settlement_amount
+                + settlement_amount,
+                2
             )
 
-            member["loan_principal_paid"] = (
+            member["loan_principal_paid"] = round(
                 float(member.get("loan_principal_paid", 0))
-                + principal
+                + principal_paid,
+                2
             )
 
-            member["loan_interest_paid"] = (
+            member["loan_interest_paid"] = round(
                 float(member.get("loan_interest_paid", 0))
-                + fair_interest
+                + interest_paid,
+                2
             )
 
             member["loan_remaining_principal"] = 0.0
             member["loan_remaining_interest"] = 0.0
+
             member["loan_active"] = False
             member["loan_settled"] = True
+            member["loan_last_payment_date"] = timestamp
 
             if "loan_payments" not in member:
                 member["loan_payments"] = []
@@ -1248,12 +1148,15 @@ def collection_page(data):
             member["loan_payments"].append({
                 "date": timestamp,
                 "amount": settlement_amount,
-                "interest_paid": fair_interest,
-                "principal_paid": principal,
+                "interest_paid": interest_paid,
+                "principal_paid": principal_paid,
                 "type": "Early Settlement",
+                "installment": int(
+                    member.get("loan_next_installment", 1)
+                ),
                 "note": (
-                    f"Future interest discount: "
-                    f"৳ {settlement['future_interest_discount']:,.2f}"
+                    f"Future Interest Discount: "
+                    f"৳ {settlement['discount']:,.2f}"
                 )
             })
 
@@ -1262,10 +1165,9 @@ def collection_page(data):
                 (
                     f"Early Settlement: "
                     f"৳ {settlement_amount:,.2f} | "
-                    f"মূলধন: ৳ {principal:,.2f} | "
-                    f"Fair Interest: ৳ {fair_interest:,.2f} | "
-                    f"Interest Discount: "
-                    f"৳ {settlement['future_interest_discount']:,.2f}"
+                    f"মূলধন: ৳ {principal_paid:,.2f} | "
+                    f"Fair Interest: ৳ {interest_paid:,.2f} | "
+                    f"Discount: ৳ {settlement['discount']:,.2f}"
                 )
             )
 
@@ -1277,41 +1179,36 @@ def collection_page(data):
             save_data(data)
 
             st.success(
-                "Early Settlement সফল হয়েছে। "
-                "ঋণ সম্পূর্ণ বন্ধ করা হয়েছে।"
+                "Early Settlement সফল হয়েছে।"
             )
-
             st.rerun()
 
-    # --------------------------------------------------------
+    # ========================================================
     # PAYMENT HISTORY
-    # --------------------------------------------------------
+    # ========================================================
 
     if member.get("loan_payments"):
-
         st.divider()
-
-        st.subheader(
-            "📋 Loan Payment History"
-        )
+        st.subheader("📋 Loan Payment History")
 
         payment_df = pd.DataFrame(
             member["loan_payments"]
         )
 
         if not payment_df.empty:
-
             rename_map = {
                 "date": "তারিখ ও সময়",
                 "amount": "আদায়",
                 "interest_paid": "Interest",
                 "principal_paid": "মূলধন",
                 "type": "ধরন",
+                "installment": "কিস্তি",
                 "note": "নোট"
             }
 
-            payment_df = payment_df.rename(
-                columns=rename_map
+            payment_df.rename(
+                columns=rename_map,
+                inplace=True
             )
 
             st.dataframe(
@@ -1322,17 +1219,14 @@ def collection_page(data):
 
 
 # ============================================================
-# MEMBER STATEMENT PAGE
+# MEMBER STATEMENT
 # ============================================================
 
 def statement_page(data):
-
     st.title("📄 সদস্য স্টেটমেন্ট (Statement)")
 
     if not data["members"]:
-        st.info(
-            "কোনো সদস্য নেই।"
-        )
+        st.info("কোনো সদস্য নেই।")
         return
 
     member_id = st.selectbox(
@@ -1348,172 +1242,174 @@ def statement_page(data):
         f"👤 {member.get('name', '')}"
     )
 
-    col1, col2, col3 = st.columns(3)
+    c1, c2, c3 = st.columns(3)
 
-    col1.metric(
+    c1.metric(
         "সঞ্চয়",
         f"৳ {float(member.get('savings', 0)):,.2f}"
     )
 
-    col2.metric(
-        "Loan Principal",
+    c2.metric(
+        "বাকি মূলধন",
         f"৳ {float(member.get('loan_remaining_principal', 0)):,.2f}"
     )
 
-    col3.metric(
-        "Loan Interest",
+    c3.metric(
+        "বাকি Interest",
         f"৳ {float(member.get('loan_remaining_interest', 0)):,.2f}"
     )
 
     st.divider()
 
-    st.subheader(
-        "📜 সম্পূর্ণ Transaction History"
-    )
+    st.subheader("🏦 Loan Details")
 
-    history = member.get(
-        "history",
-        []
-    )
-
-    if history:
-
-        statement_rows = []
-
-        for item in history:
-
-            if " - " in item:
-
-                timestamp, description = item.split(
-                    " - ",
-                    1
-                )
-
-            else:
-
-                timestamp = ""
-                description = item
-
-            statement_rows.append({
-                "তারিখ ও সময়": timestamp,
-                "বিবরণ": description
-            })
-
-        statement_df = pd.DataFrame(
-            statement_rows
-        )
-
-        st.dataframe(
-            statement_df,
-            use_container_width=True,
-            hide_index=True
-        )
-
-    else:
-
-        st.info(
-            "এই সদস্যের কোনো history নেই।"
-        )
-
-    # --------------------------------------------------------
-    # LOAN INFORMATION
-    # --------------------------------------------------------
-
-    if member.get("loan_principal", 0) > 0:
-
-        st.divider()
-
-        st.subheader(
-            "🏦 Loan Details"
-        )
-
-        loan_info = {
-            "ঋণের ধরন": member.get(
-                "loan_type", "নাই"
-            ),
-            "ঋণ প্রদানের তারিখ": member.get(
-                "loan_date", ""
-            ),
-            "বার্ষিক Rate": f"{member.get('loan_rate', 0)}%",
-            "মেয়াদ": (
-                f"{member.get('loan_duration', 0)} "
-                f"{member.get('loan_duration_unit', '')}"
-            ),
-            "প্রতি কিস্তি": (
-                f"৳ {float(member.get('loan_installment', 0)):,.2f}"
-            ),
-            "মূল ঋণ": (
-                f"৳ {float(member.get('loan_principal', 0)):,.2f}"
-            ),
-            "Original Interest": (
-                f"৳ {float(member.get('loan_interest', 0)):,.2f}"
-            ),
-            "মোট পরিশোধ": (
-                f"৳ {float(member.get('loan_total_paid', 0)):,.2f}"
-            ),
-            "বাকি মূলধন": (
-                f"৳ {float(member.get('loan_remaining_principal', 0)):,.2f}"
-            ),
-            "বাকি Interest": (
-                f"৳ {float(member.get('loan_remaining_interest', 0)):,.2f}"
-            ),
-            "Loan Status": (
+    loan_details = [
+        ["ঋণের ধরন", member.get("loan_type", "নাই")],
+        ["ঋণ প্রদানের তারিখ", member.get("loan_date", "")],
+        ["বার্ষিক Interest Rate", f"{member.get('loan_rate', 0)}%"],
+        [
+            "মেয়াদ",
+            f"{member.get('loan_duration', 0)} "
+            f"{member.get('loan_duration_unit', '')}"
+        ],
+        [
+            "প্রতি কিস্তি",
+            f"৳ {float(member.get('loan_installment', 0)):,.2f}"
+        ],
+        [
+            "মূল ঋণ",
+            f"৳ {float(member.get('loan_principal', 0)):,.2f}"
+        ],
+        [
+            "Original Interest",
+            f"৳ {float(member.get('loan_interest', 0)):,.2f}"
+        ],
+        [
+            "মোট পরিশোধ",
+            f"৳ {float(member.get('loan_total_paid', 0)):,.2f}"
+        ],
+        [
+            "বাকি মূলধন",
+            f"৳ {float(member.get('loan_remaining_principal', 0)):,.2f}"
+        ],
+        [
+            "বাকি Interest",
+            f"৳ {float(member.get('loan_remaining_interest', 0)):,.2f}"
+        ],
+        [
+            "Loan Status",
+            (
                 "চলমান"
-                if member.get("loan_active")
+                if member.get("loan_active", False)
                 else (
                     "সম্পূর্ণ পরিশোধ"
-                    if member.get("loan_settled")
+                    if member.get("loan_settled", False)
                     else "নাই"
                 )
             )
+        ]
+    ]
+
+    st.dataframe(
+        pd.DataFrame(
+            loan_details,
+            columns=["বিষয়", "তথ্য"]
+        ),
+        use_container_width=True,
+        hide_index=True
+    )
+
+    # ========================================================
+    # PAYMENT HISTORY
+    # ========================================================
+
+    if member.get("loan_payments"):
+        st.subheader("💳 Loan Payment History")
+
+        payment_df = pd.DataFrame(
+            member["loan_payments"]
+        )
+
+        rename_map = {
+            "date": "তারিখ ও সময়",
+            "amount": "আদায়",
+            "interest_paid": "Interest",
+            "principal_paid": "মূলধন",
+            "type": "ধরন",
+            "installment": "কিস্তি",
+            "note": "নোট"
         }
 
-        loan_df = pd.DataFrame(
-            list(loan_info.items()),
-            columns=["বিষয়", "তথ্য"]
+        payment_df.rename(
+            columns=rename_map,
+            inplace=True
         )
 
         st.dataframe(
-            loan_df,
+            payment_df,
             use_container_width=True,
             hide_index=True
         )
 
+    # ========================================================
+    # COMPLETE HISTORY
+    # ========================================================
+
+    st.subheader("📜 সম্পূর্ণ Transaction History")
+
+    history = member.get("history", [])
+
+    if not history:
+        st.info("কোনো history নেই।")
+        return
+
+    rows = []
+
+    for item in history:
+        if " - " in item:
+            timestamp, description = item.split(
+                " - ",
+                1
+            )
+        else:
+            timestamp = ""
+            description = item
+
+        rows.append({
+            "তারিখ ও সময়": timestamp,
+            "বিবরণ": description
+        })
+
+    st.dataframe(
+        pd.DataFrame(rows),
+        use_container_width=True,
+        hide_index=True
+    )
+
 
 # ============================================================
-# MAIN APPLICATION
+# MAIN
 # ============================================================
 
 def main():
-
-    # --------------------------------------------------------
-    # LOGIN
-    # --------------------------------------------------------
 
     if "logged_in" not in st.session_state:
         st.session_state["logged_in"] = False
 
     if not st.session_state["logged_in"]:
-
         login_page()
         return
 
-    # --------------------------------------------------------
-    # LOAD DATABASE
-    # --------------------------------------------------------
-
-    data = load_data()
-    data = prepare_database(data)
+    data = prepare_database(
+        load_data()
+    )
 
     # --------------------------------------------------------
     # SIDEBAR
     # --------------------------------------------------------
 
     st.sidebar.title("💰 আমার সমিতি")
-
-    st.sidebar.success(
-        "Admin Logged In"
-    )
+    st.sidebar.success("Admin Logged In")
 
     pages = [
         "🏠 ড্যাশবোর্ড",
@@ -1535,44 +1431,35 @@ def main():
         "🚪 Logout",
         use_container_width=True
     ):
-
         st.session_state["logged_in"] = False
         st.rerun()
 
-    # ========================================================
-    # IMPORTANT:
-    # Sidebar names and conditions are EXACTLY the same.
-    # ========================================================
+    # --------------------------------------------------------
+    # PAGE ROUTING
+    # --------------------------------------------------------
 
     if selected_page == "🏠 ড্যাশবোর্ড":
-
         dashboard_page(data)
 
     elif selected_page == "👥 সদস্য ব্যবস্থাপনা":
-
         member_page(data)
 
     elif selected_page == "💰 সঞ্চয় জমা / উত্তোলন":
-
         savings_page(data)
 
     elif selected_page == "🏦 ঋণ প্রদান":
-
         loan_page(data)
 
     elif selected_page == "💳 ঋণের টাকা বা কিস্তি আদায়":
-
         collection_page(data)
 
     elif selected_page == "📄 সদস্য স্টেটমেন্ট (Statement)":
-
         statement_page(data)
 
 
 # ============================================================
-# RUN
+# START
 # ============================================================
 
 if __name__ == "__main__":
     main()
-```
