@@ -67,7 +67,7 @@ def apply_css():
         /* Compact Login */
         .login-shell {
             max-width: 1120px;
-            margin: 20px auto 0;
+            margin: 8px auto 0;
         }
 
         .brand-panel {
@@ -123,44 +123,40 @@ def apply_css():
             font-size: 14px;
         }
 
-        .feature-grid {
-            display: grid;
-            grid-template-columns: repeat(2, 1fr);
-            gap: 0;
-            background: rgba(255,255,255,.78);
-            border-radius: 18px;
-            padding: 8px;
-            box-shadow: 0 8px 22px rgba(35,100,43,.07);
-        }
-
-        .feature {
-            padding: 10px 7px;
-            border-right: 1px solid #d9ead9;
-            color: #34513a;
-        }
-
-        .feature:nth-child(2n) {
-            border-right: 0;
-        }
-
-        .feature:nth-child(-n+2) {
-            border-bottom: 1px solid #d9ead9;
+        .feature-card {
+            min-height: 92px;
+            margin-top: 10px;
+            padding: 13px 8px;
+            text-align: center;
+            background: rgba(255,255,255,.82);
+            border: 1px solid #d9ead9;
+            border-radius: 16px;
+            box-shadow: 0 7px 18px rgba(35,100,43,.06);
         }
 
         .feature-icon {
             font-size: 23px;
-            margin-bottom: 3px;
+            line-height: 1;
+            margin-bottom: 7px;
         }
 
         .feature-title {
             font-weight: 800;
             font-size: 13px;
+            color: #34513a;
         }
 
         .feature-text {
             font-size: 11px;
-            margin-top: 2px;
+            margin-top: 3px;
             color: #68766b;
+        }
+
+        .login-footer {
+            text-align: center;
+            color: #7a847b;
+            margin-top: 14px;
+            font-size: 12px;
         }
 
         .login-card {
@@ -527,53 +523,46 @@ def mark_schedule_payment(member, amount):
 def login_page():
     apply_css()
 
-    left, right = st.columns([1.05, 0.95], gap="large")
+    st.markdown('<div class="login-shell">', unsafe_allow_html=True)
+    left, right = st.columns([1.02, 0.98], gap="large")
 
     with left:
         st.markdown(
-            """
-            <div class="brand-panel">
-                <div class="brand-icon">🌿</div>
-                <div class="brand-title">আমার সমিতি</div>
-                <div class="brand-subtitle">আপনার সমিতি, আপনার উন্নতি</div>
-                <div class="secure-pill">🛡️ নিরাপদ · সহজ · স্মার্ট সমাধান</div>
-
-                <div class="feature-grid">
-                    <div class="feature">
-                        <div class="feature-icon">👥</div>
-                        <div class="feature-title">সদস্য ব্যবস্থাপনা</div>
-                        <div class="feature-text">সদস্য যোগ ও তালিকা</div>
-                    </div>
-                    <div class="feature">
-                        <div class="feature-icon">🐷</div>
-                        <div class="feature-title">সঞ্চয় ব্যবস্থাপনা</div>
-                        <div class="feature-text">সঞ্চয় জমা ও হিসাব</div>
-                    </div>
-                    <div class="feature">
-                        <div class="feature-icon">💰</div>
-                        <div class="feature-title">ঋণ ব্যবস্থাপনা</div>
-                        <div class="feature-text">ঋণ ও কিস্তি হিসাব</div>
-                    </div>
-                    <div class="feature">
-                        <div class="feature-icon">📊</div>
-                        <div class="feature-title">রিপোর্ট ও স্টেটমেন্ট</div>
-                        <div class="feature-text">স্বচ্ছ হিসাব ও রিপোর্ট</div>
-                    </div>
-                </div>
-            </div>
-            """,
+            '<div class="brand-panel">'
+            '<div class="brand-icon">🌿</div>'
+            '<div class="brand-title">আমার সমিতি</div>'
+            '<div class="brand-subtitle">আপনার সমিতি, আপনার উন্নতি</div>'
+            '<div class="secure-pill">🛡️ নিরাপদ · সহজ · স্মার্ট সমাধান</div>'
+            '</div>',
             unsafe_allow_html=True,
         )
 
+        f1, f2 = st.columns(2, gap="small")
+        f3, f4 = st.columns(2, gap="small")
+        features = [
+            (f1, "👥", "সদস্য ব্যবস্থাপনা", "সদস্য যোগ ও তালিকা"),
+            (f2, "🐷", "সঞ্চয় ব্যবস্থাপনা", "সঞ্চয় জমা ও হিসাব"),
+            (f3, "💰", "ঋণ ব্যবস্থাপনা", "ঋণ ও কিস্তি হিসাব"),
+            (f4, "📊", "রিপোর্ট ও স্টেটমেন্ট", "স্বচ্ছ হিসাব ও রিপোর্ট"),
+        ]
+        for col, icon, title, text in features:
+            with col:
+                st.markdown(
+                    f"""<div class="feature-card">
+                        <div class="feature-icon">{icon}</div>
+                        <div class="feature-title">{title}</div>
+                        <div class="feature-text">{text}</div>
+                    </div>""",
+                    unsafe_allow_html=True,
+                )
+
     with right:
         st.markdown(
-            """
-            <div class="login-card">
-                <div class="login-lock">🔐</div>
-                <div class="login-title">Admin Login</div>
-                <div class="login-help">আপনার অ্যাডমিন অ্যাকাউন্ট দিয়ে লগইন করুন</div>
-            </div>
-            """,
+            '<div class="login-card">'
+            '<div class="login-lock">🔐</div>'
+            '<div class="login-title">Admin Login</div>'
+            '<div class="login-help">আপনার অ্যাডমিন অ্যাকাউন্ট দিয়ে লগইন করুন</div>'
+            '</div>',
             unsafe_allow_html=True,
         )
 
@@ -599,12 +588,14 @@ def login_page():
                 st.error("ইউজারনেম অথবা পাসওয়ার্ড সঠিক নয়।")
 
         st.markdown(
-            '<div style="text-align:center;color:#7a847b;margin-top:14px;font-size:12px;">'
+            '<div class="login-footer">'
             '🔒 আপনার তথ্য নিরাপদ ও গোপন রাখা হবে<br><br>'
             '© 2026 আমার সমিতি · সর্বস্বত্ব সংরক্ষিত'
             '</div>',
             unsafe_allow_html=True,
         )
+
+    st.markdown('</div>', unsafe_allow_html=True)
 
 
 # =========================================================
