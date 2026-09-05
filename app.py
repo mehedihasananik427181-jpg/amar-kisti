@@ -2,7 +2,7 @@ import json
 import os
 import streamlit as st
 import pandas as pd
-from datetime import datetime
+from datetime import datetime, timedelta
 
 # ডেটাবেজ ফাইলের নাম
 DB_FILE = "database.json"
@@ -41,7 +41,7 @@ if "logged_in" not in st.session_state:
 # লগইন পেজ ডিজাইন
 if not st.session_state.logged_in:
     st.markdown("<h1 style='text-align: center; color: #1E3A8A;'>🏦 আমার কিস্তি</h1>", unsafe_allow_html=True)
-    st.markdown("<p style='text-align: center; font-style: italic;'>Micro-Finance & Somity Management System</p>", unsafe_allow_html=True)
+    st.markdown("<p style='text-align: center; font-style: italic;'>Micro-Finance & Somity Management System v7.0</p>", unsafe_allow_html=True)
     st.write("---")
     
     with st.form("login_form"):
@@ -75,7 +75,6 @@ else:
     ])
 
     st.markdown(f"<h1 style='text-align: center; color: #1E3A8A;'>🏦 আমার কিস্তি (Amar Kisti)</h1>", unsafe_allow_html=True)
-    st.markdown(f"<p style='text-align: center; font-style: italic;'>ক্ষুদ্র সঞ্চয় সমিতি ও ডিপিএস ট্র্যাকার ডিজিটাল ড্যাশবোর্ড v6.0</p>", unsafe_allow_html=True)
     st.write("---")
 
     # ১. ড্যাশবোর্ড ও সদস্য তালিকা
@@ -85,7 +84,8 @@ else:
             st.info("বর্তমানে কোনো সদস্য নিবন্ধিত নেই।")
         else:
             for phone, info in data["members"].items():
-                st.info(f"👤 **নাম:** {info['name']} | 📱 **মোবাইল:** {phone} | 💰 **মোট সঞ্চয়:** {info.get('savings', 0.0)} টাকা | 📉 **চলতি ঋণ:** {info.get('loan', 0.0)} টাকা")
+                loan_type = info.get("loan_type", "নাই")
+                st.info(f"👤 **নাম:** {info['name']} | 📱 **মোবাইল:** {phone} | 💰 **মোট সঞ্চয়:** {info.get('savings', 0.0)} টাকা | 📉 **অবশিষ্ট ঋণ:** {info.get('loan_principal', 0.0) + info.get('loan_interest', 0.0)} টাকা ({loan_type})")
 
     # ২. নতুন সদস্য যুক্ত করুন
     elif choice == "নতুন সদস্য যুক্ত করুন":
@@ -102,7 +102,10 @@ else:
                     data["members"][phone] = {
                         "name": name,
                         "savings": initial_savings,
-                        "loan": 0.0,
+                        "loan_principal": 0.0,
+                        "loan_interest": 0.0,
+                        "loan_type": "নাই",
+                        "loan_date": "",
                         "history": [f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')} - হিসাব খোলা হয়েছে প্রাথমিক সঞ্চয় {initial_savings} টাকা দিয়ে।"]
                     }
                     save_data(data)
@@ -143,27 +146,44 @@ else:
             phone = member_list[selected_member]
             
             info = data["members"][phone]
-            st.info(f"👤 সদস্য: {info['name']} | 📉 বর্তমান চলতি ঋণ: {info.get('loan', 0.0)} টাকা")
+            current_total_loan = info.get("loan_principal", 0.0) + info.get("loan_interest", 0.0)
+            st.info(f"👤 সদস্য: {info['name']} | 📉 বর্তমান বকেয়া লোন: {current_total_loan} টাকা")
             
-            loan_amount = st.number_input("💵 নতুন ঋণের পরিমাণ (টাকা)", min_value=0.0, step=10.0)
-            interest_rate = st.slider("📊 সুদের হার নির্ধারণ করুন (%)", 0, 50, 10)
-            
-            total_interest = (loan_amount * interest_rate) / 100
-            total_payable = loan_amount + total_interest
-            
-            st.warning(f"📊 মোট সুদ আসবে: {total_interest} টাকা | 📑 সদস্যকে মোট ফেরত দিতে হবে: {total_payable} টাকা")
-            
-            if st.button("🚀 ঋণ বা লোন অনুমোদন করুন"):
-                if loan_amount > 0:
-                    data["members"][phone]["loan"] = data["members"][phone].get("loan", 0.0) + total_payable
-                    data["members"][phone]["history"].append(f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')} - ঋণ গ্রহণ (সুদসহ): +{total_payable} টাকা ({interest_rate}% সুদ)।")
-                    save_data(data)
-                    st.success(f"✅ সফলভাবে {loan_amount} টাকা ঋণ বিতরণ করা হয়েছে (মোট প্রদেয়: {total_payable})")
-                    st.rerun()
+            if current_total_loan > 0:
+                st.error("⚠️ এই সদস্যের পূর্বের লোন বকেয়া আছে। নতুন লোন দেওয়া যাবে না।")
+            else:
+                loan_amount = st.number_input("💵 ঋণের আসল পরিমাণ (টাকা)", min_value=0.0, step=100.0)
+                interest_rate = st.slider("📊 বার্ষিক সুদের হার নির্ধারণ করুন (%)", 1, 50, 10)
+                
+                loan_type = st.selectbox("📅 কিস্তির ধরন নির্বাচন করুন", ["দিনের হিসাবে", "সাপ্তাহিক হিসাবে", "মাসিক হিসাবে"])
+                duration = st.number_input("⏱️ মেয়াদ বা কিস্তির সংখ্যা দিন", min_value=1, step=1, value=10)
+                
+                # ক্রমহ্রাসমান (Reducing Balance) প্রাথমিক সুদ হিসাব
+                # প্রথম কিস্তির জন্য আনুমানিক টোটাল প্রদেয় সুদ দেখানো হচ্ছে
+                total_interest = (loan_amount * (interest_rate / 100) * (duration / 12 if loan_type == "মাসিক হিসাবে" else duration / 52 if loan_type == "সাপ্তাহিক হিসাবে" else duration / 365))
+                total_payable = loan_amount + total_interest
+                
+                st.warning(f"📉 প্রারম্ভিক হিসাব: আসল {loan_amount} টাকা | আনুমানিক মোট সুদ: {round(total_interest, 2)} টাকা")
+                
+                if st.button("🚀 ঋণ বা লোন অনুমোদন করুন"):
+                    if loan_amount > 0:
+                        data["members"][phone]["loan_principal"] = loan_amount
+                        data["members"][phone]["loan_interest"] = total_interest
+                        data["members"][phone]["loan_type"] = loan_type
+                        data["members"][phone]["loan_duration"] = duration
+                        data["members"][phone]["loan_rate"] = interest_rate
+                        data["members"][phone]["loan_date"] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                        
+                        data["members"][phone]["history"].append(
+                            f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')} - ঋণ গ্রহণ: আসল {loan_amount} টাকা, সুদ {round(total_interest, 2)} টাকা ({loan_type}, মেয়াদ: {duration})"
+                        )
+                        save_data(data)
+                        st.success(f"✅ সফলভাবে লোন অনুমোদন করা হয়েছে!")
+                        st.rerun()
 
     # ৫. ঋণের টাকা বা কিস্তি আদায়
-    elif choice == "ঋণের টাকা বা কিস্তি আদায়":
-        st.subheader("📉 ঋণের টাকা বা কিস্তি আদায় করুন")
+    elif choice == "ঋণের টাকা বা kiস্তি আদায়":
+        st.subheader("📉 ঋণের টাকা বা কিস্তি আদায় করুন (ক্রমহ্রাসমান ও আর্লি সেটেলমেন্ট লজিক)")
         if not data["members"]:
             st.warning("কোনো সদস্য নেই।")
         else:
@@ -172,43 +192,19 @@ else:
             phone = member_list[selected_member]
             
             info = data["members"][phone]
-            current_loan = info.get("loan", 0.0)
-            st.info(f"👤 সদস্য: {info['name']} | 📉 বর্তমান মোট ঋণ বা দেনা: {current_loan} টাকা")
+            principal = info.get("loan_principal", 0.0)
+            interest = info.get("loan_interest", 0.0)
+            total_due = principal + interest
             
-            repay_amount = st.number_input("💵 পরিশোধের পরিমাণ (টাকা)", min_value=0.0, max_value=float(current_loan) if current_loan > 0 else 0.0, step=10.0)
-            
-            if st.button("✔️ ঋণ/কিস্তি আদায় নিশ্চিত করুন"):
-                if repay_amount > 0:
-                    data["members"][phone]["loan"] -= repay_amount
-                    data["members"][phone]["history"].append(f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')} - ঋণ/কিস্তি পরিশোধ: -{repay_amount} টাকা।")
-                    save_data(data)
-                    st.success(f"🎉 সফলভাবে {repay_amount} টাকা কিস্তি বা ঋণ আদায় করা হয়েছে!")
-                    st.rerun()
-                else:
-                    st.warning("পরিশোধের পরিমাণ ০ এর বেশি হতে হবে অথবা সদস্যের কোনো বকেয়া লোন নেই।")
-
-    # ৬. সদস্য স্টেটমেন্ট (Statement)
-    elif choice == "সদস্য স্টেটমেন্ট (Statement)":
-        st.subheader("📋 সদস্যের সম্পূর্ণ লেনদেন স্টেটমেন্ট")
-        if not data["members"]:
-            st.warning("কোনো সদস্য নেই।")
-        else:
-            member_list = {f"{info['name']} ({phone})": phone for phone, info in data["members"].items()}
-            selected_member = st.selectbox("📞 স্টেটমেন্ট দেখতে সদস্য নির্বাচন করুন", list(member_list.keys()))
-            phone = member_list[selected_member]
-            
-            info = data["members"][phone]
-            st.markdown(f"### 👤 নাম: {info['name']}")
-            st.write(f"📱 **মোবাইল:** {phone}")
-            st.write(f"💰 **বর্তমান মোট জমানো সঞ্চয়:** {info.get('savings', 0.0)} টাকা")
-            st.write(f"📉 **বর্তমান অবশিষ্ট লোন/দেনা:** {info.get('loan', 0.0)} টাকা")
-            st.write("---")
-            st.write("📜 **লেনদেনের ইতিহাস (History):**")
-            
-            history = info.get("history", [])
-            if not history:
-                st.info("এই সদস্যের কোনো লেনদেনের ইতিহাস পাওয়া যায়নি।")
+            if total_due <= 0:
+                st.info("ℹ️ এই সদস্যের কোনো বকেয়া লোন নেই।")
             else:
-                # কোনো লুপের ঝামেলা না রেখে সরাসরি মার্কডাউন স্টাইলে ইতিহাস প্রিন্ট করা
-                for log in reversed(history):
-                    st.markdown(f"📌 {log}")
+                st.info(f"👤 সদস্য: {info['name']} | 💵 বকেয়া আসল: {round(principal, 2)} টাকা | 📊 বকেয়া সুদ: {round(interest, 2)} টাকা")
+                st.error(f"💰 মোট প্রদেয় বকেয়া: {round(total_due, 2)} টাকা")
+                
+                # আর্লি সেটেলমেন্ট ডিসকাউন্ট ক্যালকুলেটর
+                st.markdown("---")
+                st.markdown("💡 **আর্লি সেটেলমেন্ট বা দ্রুত পরিশোধ অপশন:**")
+                early_pay = st.checkbox("সদস্য কি আজকেই সম্পূর্ণ লোন একসাথে শোধ করে দিতে চান?")
+                
+                if early_pay:
