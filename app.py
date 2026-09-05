@@ -46,25 +46,27 @@ if not st.session_state.logged_in:
 
 # ২. মূল অ্যাপ স্ক্রিন প্রসেস (লগইন সফল হলে এটি চলবে)
 if st.session_state.logged_in:
-    st.sidebar.title("🎛️  কন্ট্রোল প্যানেল")
-    if st.sidebar.button("🔒  নিরাপদ লগআউট", type="primary"):
+    st.sidebar.title("🎛️ কন্ট্রোল প্যানেল")
+    if st.sidebar.button("🔒 নিরাপদ লগআউট", type="primary"):
         st.session_state.logged_in = False
         st.rerun()
         
-    choice = st.sidebar.radio("কোন কাজ করতে চান?", [
+    menu_options = [
         "ড্যাশবোর্ড ও সদস্য তালিকা",
         "নতুন সদস্য যুক্ত করুন",
         "কিস্তি বা টাকা জমা নিন",
         "ঋণ বা লোন বিতরণ (Loan)",
         "ঋণের টাকা বা কিস্তি আদায়",
         "সদস্য স্টেটমেন্ট (Statement)"
-    ])
+    ]
+    
+    choice = st.sidebar.radio("কোন কাজ করতে চান?", menu_options)
 
     st.markdown("<h1 style='text-align: center; color: #1E3A8A;'>🏦 আমার কিস্তি (Amar Kisti)</h1>", unsafe_allow_html=True)
     st.write("---")
 
     # পৃষ্ঠা ১: ড্যাশবোর্ড ও সদস্য তালিকা
-    if choice == "ড্যাশবোর্ড ও সদস্য তালিকা":
+    if choice == menu_options[0]:
         st.subheader("📊 ড্যাশবোর্ড ও সদস্য তালিকা")
         if not data["members"]:
             st.info("বর্তমানে কোনো সদস্য নিবন্ধিত নেই।")
@@ -74,7 +76,7 @@ if st.session_state.logged_in:
                 st.info(f"👤 **নাম:** {info['name']} | 📱 **মোবাইল:** {phone} | 💰 **মোট সঞ্চয়:** {info.get('savings', 0.0)} টাকা | 📉 **অবशिष्ट ঋণ:** {total_loan} টাকা ({info.get('loan_type', 'নাই')})")
 
     # পৃষ্ঠা ২: নতুন সদস্য যুক্ত করুন
-    if choice == "নতুন সদস্য যুক্ত করুন":
+    if choice == menu_options[1]:
         st.subheader("➕ নতুন সদস্যের প্রোফাইল তৈরি করুন")
         phone = st.text_input("📱 সদস্যের মোবাইল নম্বর দিন")
         name = st.text_input("✍️ সদস্যের পুরো নাম লিখুন")
@@ -95,11 +97,12 @@ if st.session_state.logged_in:
                 }
                 save_data(data)
                 st.success(f"🎉 সফলভাবে {name}-এর প্রোফাইল তৈরি হয়েছে!")
+                st.rerun()
             else:
                 st.warning("দয়া করে নাম এবং মোবাইল নম্বর দিন।")
 
     # পৃষ্ঠা ৩: কিস্তি বা টাকা জমা নিন
-    if choice == "কিস্তি বা টাকা জমা নিন":
+    if choice == menu_options[2]:
         st.subheader("💰 সদস্যের কিস্তি বা সঞ্চয়ের টাকা জমা নিন")
         if not data["members"]:
             st.warning("কোনো সদস্য নেই।")
@@ -117,7 +120,7 @@ if st.session_state.logged_in:
                     st.rerun()
 
     # পৃষ্ঠা ৪: ঋণ বা লোন বিতরণ (Loan)
-    if choice == "ঋণ বা লোন বিতরণ (Loan)":
+    if choice == menu_options[3]:
         st.subheader("💸 সদস্যকে নতুন ঋণ বা লোন প্রদান করুন")
         if not data["members"]:
             st.warning("কোনো সদস্য নেই।")
@@ -154,7 +157,7 @@ if st.session_state.logged_in:
                         st.rerun()
 
     # পৃষ্ঠা ৫: ঋণের টাকা বা কিস্তি আদায়
-    if choice == "ঋণের টাকা বা কিস্তি আদায়":
+    if choice == menu_options[4]:
         st.subheader("📉 ঋণের টাকা বা কিস্তি আদায় করুন")
         if not data["members"]:
             st.warning("কোনো সদস্য নেই।")
