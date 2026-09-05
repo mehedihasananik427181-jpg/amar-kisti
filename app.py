@@ -45,10 +45,8 @@ if not st.session_state.logged_in:
                 st.error("❌ ভুল পাসওয়ার্ড!")
 
 # ২. মূল অ্যাপ স্ক্রিন প্রসেস (লগইন সফল হলে এটি চলবে)
-if st.session_state.logged_in:
-    # সাইডবার এবং মেনু সবার আগে লোড হবে
+elif st.session_state.logged_in:
     st.sidebar.title("🎛️ কন্ট্রোল প্যানেল")
-    
     if st.sidebar.button("🔒 নিরাপদ লগআউট", type="primary"):
         st.session_state.logged_in = False
         st.rerun()
@@ -59,10 +57,9 @@ if st.session_state.logged_in:
         "কিস্তি বা টাকা জমা নিন",
         "ঋণ বা লোন বিতরণ (Loan)",
         "ঋণের টাকা বা কিস্তি আদায়",
-        "সদস্য স্টেটমেন্ট (Statement)"
+        "সদস্য স্টেটメント (Statement)"
     ])
 
-    # মূল স্ক্রিনের টাইটেল
     st.markdown("<h1 style='text-align: center; color: #1E3A8A;'>🏦 আমার কিস্তি (Amar Kisti)</h1>", unsafe_allow_html=True)
     st.write("---")
 
@@ -77,7 +74,7 @@ if st.session_state.logged_in:
 
     # পৃষ্ঠা ২: নতুন সদস্য যুক্ত করুন
     elif choice == "নতুন সদস্য যুক্ত করুন":
-        st.subheader("➕ নতুন সদস্যের প্রোফাইল তৈরি করুন")
+        st.subheader("➕ নতুন সদস্যের প্রোфাইল তৈরি করুন")
         phone = st.text_input("📱 সদস্যের মোবাইল নম্বর দিন")
         name = st.text_input("✍️ সদস্যের পুরো নাম লিখুন")
         initial_savings = st.number_input("💵 প্রাথমিক সঞ্চয় জমা (টাকা)", min_value=0.0, step=10.0)
@@ -196,5 +193,6 @@ if st.session_state.logged_in:
                         
             with col2:
                 if st.button("🔥 আর্লি সেটেলমেন্ট (ঋণ ক্লোজ করুন)"):
-                    loan_date_str = info.get("loan_date", "")
-                    if loan_date_str:
+                    loan_date_str = info.get("loan_date", datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
+                    loan_date = datetime.strptime(loan_date_str, '%Y-%m-%d %H:%M:%S')
+                    days_passed = max((datetime.now() - loan_date).days, 1)
