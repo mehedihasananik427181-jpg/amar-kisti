@@ -1,13 +1,14 @@
-import streamlit as st
 import json
 import os
-import math
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 
-# ============================================================
-# আমার সমিতি — Micro-Finance / Somity Management System
-# Clean single-file Streamlit application
-# ============================================================
+import pandas as pd
+import streamlit as st
+
+
+# =========================================================
+# আমার সমিতি - Micro-Finance / Somity Management
+# =========================================================
 
 st.set_page_config(
     page_title="আমার সমিতি",
@@ -16,1328 +17,1225 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# -----------------------------
-# Configuration
-# -----------------------------
 DB_FILE = "database.json"
-LEGACY_DB_FILE = "database"
 ADMIN_USER = "admin"
 ADMIN_PASS = "somity2026"
 
-MENU_ITEMS = [
-    "ড্যাশবোর্ড ও সদস্য তালিকা",
-    "নতুন সদস্য যুক্ত করুন",
-    "কিস্তি বা টাকা জমা নিন",
-    "ঋণ বা লোন বিতরণ (Loan)",
-    "ঋণের টাকা বা কিস্তি আদায়",
-    "সদস্য স্টেটমেন্ট (Statement)",
+MENU = [
+    "🏠 ড্যাশবোর্ড",
+    "👥 সদস্য ব্যবস্থাপনা",
+    "💰 সঞ্চয় জমা",
+    "💸 ঋণ প্রদান",
+    "💳 ঋণের টাকা বা কিস্তি আদায়",
+    "📋 সদস্য স্টেটমেন্ট (Statement)",
 ]
 
-# -----------------------------
-# Utility functions
-# -----------------------------
-def now_text():
+
+# =========================================================
+# CSS
+# =========================================================
+def apply_css():
+    st.markdown(
+        """
+        <style>
+        /* Main */
+        .stApp {
+            background:
+                radial-gradient(circle at 10% 10%, rgba(220,245,221,.75), transparent 28%),
+                radial-gradient(circle at 90% 20%, rgba(235,250,236,.8), transparent 30%),
+                #f8fcf8;
+        }
+
+        .block-container {
+            max-width: 1250px;
+            padding-top: 1.5rem;
+            padding-bottom: 2rem;
+        }
+
+        /* Sidebar */
+        [data-testid="stSidebar"] {
+            background: linear-gradient(180deg, #f2fbf2 0%, #e7f5e8 100%);
+            border-right: 1px solid #d8ead9;
+        }
+
+        [data-testid="stSidebar"] .stRadio label {
+            border-radius: 12px;
+            padding: 8px 10px;
+            margin: 2px 0;
+        }
+
+        /* Login */
+        .login-shell {
+            min-height: 650px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 18px;
+        }
+
+        .brand-panel {
+            min-height: 620px;
+            border-radius: 30px;
+            padding: 50px 42px;
+            background:
+                radial-gradient(circle at 18% 20%, rgba(255,255,255,.75), transparent 22%),
+                linear-gradient(145deg, #edf9ed 0%, #d8f0d8 52%, #bfe4bd 100%);
+            border: 1px solid #d6ebd5;
+            box-shadow: 0 20px 60px rgba(35,100,43,.10);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            text-align: center;
+            overflow: hidden;
+        }
+
+        .brand-icon {
+            width: 92px;
+            height: 92px;
+            margin: 0 auto 20px auto;
+            border-radius: 50%;
+            background: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 48px;
+            box-shadow: 0 8px 25px rgba(39,102,45,.14);
+            border: 6px solid rgba(255,255,255,.65);
+        }
+
+        .brand-title {
+            font-size: clamp(42px, 5vw, 72px);
+            font-weight: 900;
+            color: #17652b;
+            line-height: 1.15;
+            margin-bottom: 12px;
+        }
+
+        .brand-subtitle {
+            font-size: 22px;
+            color: #4d5e50;
+            margin-bottom: 28px;
+        }
+
+        .secure-pill {
+            display: inline-block;
+            width: fit-content;
+            margin: 0 auto 35px auto;
+            padding: 10px 20px;
+            border-radius: 999px;
+            background: rgba(255,255,255,.58);
+            border: 1px solid #c8e6c6;
+            color: #2f7b39;
+            font-weight: 700;
+        }
+
+        .feature-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 0;
+            background: rgba(255,255,255,.78);
+            border-radius: 22px;
+            padding: 16px 8px;
+            box-shadow: 0 10px 30px rgba(35,100,43,.08);
+        }
+
+        .feature {
+            padding: 12px 8px;
+            border-right: 1px solid #d9ead9;
+            color: #34513a;
+        }
+
+        .feature:last-child {
+            border-right: 0;
+        }
+
+        .feature-icon {
+            font-size: 28px;
+            margin-bottom: 5px;
+        }
+
+        .feature-title {
+            font-weight: 800;
+            font-size: 15px;
+        }
+
+        .feature-text {
+            font-size: 12px;
+            margin-top: 4px;
+            color: #68766b;
+        }
+
+        .login-card {
+            min-height: 620px;
+            border-radius: 30px;
+            padding: 48px 48px;
+            background: rgba(255,255,255,.96);
+            border: 1px solid #e1e9e2;
+            box-shadow: 0 20px 60px rgba(27,75,35,.12);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+
+        .login-lock {
+            width: 76px;
+            height: 76px;
+            margin: 0 auto 18px auto;
+            border-radius: 50%;
+            background: #eaf7e9;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 38px;
+        }
+
+        .login-title {
+            text-align: center;
+            font-size: 38px;
+            font-weight: 850;
+            color: #17243a;
+            margin-bottom: 4px;
+        }
+
+        .login-help {
+            text-align: center;
+            color: #6d756f;
+            margin-bottom: 28px;
+        }
+
+        /* Buttons */
+        .stButton > button {
+            border-radius: 11px;
+            font-weight: 700;
+            min-height: 42px;
+        }
+
+        /* Cards */
+        .section-card {
+            background: white;
+            border: 1px solid #e4ece5;
+            border-radius: 18px;
+            padding: 18px;
+            box-shadow: 0 8px 28px rgba(30,75,35,.06);
+            margin-bottom: 18px;
+        }
+
+        .metric-card {
+            background: white;
+            border: 1px solid #e4ece5;
+            border-radius: 18px;
+            padding: 20px;
+            box-shadow: 0 8px 28px rgba(30,75,35,.06);
+        }
+
+        .metric-label {
+            color: #6c786e;
+            font-size: 14px;
+            font-weight: 700;
+        }
+
+        .metric-value {
+            color: #17652b;
+            font-size: 28px;
+            font-weight: 900;
+            margin-top: 5px;
+        }
+
+        .page-title {
+            color: #17652b;
+            font-weight: 900;
+            margin-bottom: 2px;
+        }
+
+        .page-subtitle {
+            color: #68756b;
+            margin-bottom: 22px;
+        }
+
+        @media (max-width: 900px) {
+            .brand-panel, .login-card {
+                min-height: auto;
+                padding: 35px 24px;
+            }
+            .feature-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+            .feature:nth-child(2) {
+                border-right: 0;
+            }
+            .feature:nth-child(-n+2) {
+                border-bottom: 1px solid #d9ead9;
+            }
+        }
+
+        @media (max-width: 600px) {
+            .brand-title {
+                font-size: 42px;
+            }
+            .login-title {
+                font-size: 30px;
+            }
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+# =========================================================
+# Database helpers
+# =========================================================
+def now_str():
     return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-
-
-def money(value):
-    return f"৳ {float(value or 0):,.2f}"
-
-
-def safe_float(value, default=0.0):
-    try:
-        return float(value)
-    except (TypeError, ValueError):
-        return default
 
 
 def parse_dt(value):
     if not value:
         return None
-    if isinstance(value, datetime):
-        return value
-    for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d"):
-        try:
-            return datetime.strptime(str(value), fmt)
-        except ValueError:
-            pass
-    return None
+    try:
+        return datetime.strptime(str(value), "%Y-%m-%d %H:%M:%S")
+    except (ValueError, TypeError):
+        return None
 
 
-def add_history(info, message):
-    if "history" not in info or not isinstance(info["history"], list):
-        info["history"] = []
-    info["history"].append(f"{now_text()} - {message}")
-
-
-def ensure_member_schema(info):
-    """Keep compatibility with the user's existing database format."""
-    info.setdefault("name", "")
-    info["savings"] = safe_float(info.get("savings", 0))
-    info["loan_principal"] = safe_float(
-        info.get("loan_principal", info.get("loan", 0))
-    )
-    info["loan_interest"] = safe_float(info.get("loan_interest", 0))
-    info.setdefault("loan_type", "নাই")
-    info.setdefault("loan_date", "")
-    info["loan_rate"] = safe_float(info.get("loan_rate", 0))
-    info["loan_duration"] = safe_float(info.get("loan_duration", 0))
-    info.setdefault("loan_duration_unit", "Months")
-    info.setdefault("loan_status", "Closed" if info["loan_principal"] <= 0 else "Active")
-    info.setdefault("loan_last_payment_date", info.get("loan_date", ""))
-    info.setdefault("loan_original_principal", info["loan_principal"])
-    info.setdefault("loan_total_interest_charged", 0.0)
-    info.setdefault("loan_total_paid", 0.0)
-    info.setdefault("loan_installment", 0.0)
-    info.setdefault("loan_expected_total", 0.0)
-    info.setdefault("loan_next_due_date", "")
-    if "history" not in info or not isinstance(info["history"], list):
-        info["history"] = []
-    return info
+def money(value):
+    try:
+        return f"৳{float(value):,.2f}"
+    except (ValueError, TypeError):
+        return "৳0.00"
 
 
 def load_data():
-    # Prefer the requested database.json format.
-    source = DB_FILE
-    if not os.path.exists(source) and os.path.exists(LEGACY_DB_FILE):
-        source = LEGACY_DB_FILE
-
-    if not os.path.exists(source):
+    if not os.path.exists(DB_FILE):
         return {"members": {}}
 
     try:
-        with open(source, "r", encoding="utf-8") as f:
-            raw = json.load(f)
-        if not isinstance(raw, dict):
-            return {"members": {}}
-        raw.setdefault("members", {})
-        for member in raw["members"].values():
-            ensure_member_schema(member)
-        return raw
+        with open(DB_FILE, "r", encoding="utf-8") as file:
+            data = json.load(file)
     except (json.JSONDecodeError, OSError):
         return {"members": {}}
 
+    if not isinstance(data, dict):
+        data = {"members": {}}
+
+    data.setdefault("members", {})
+    return data
+
 
 def save_data(data):
-    with open(DB_FILE, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=4)
+    temp_file = DB_FILE + ".tmp"
+    with open(temp_file, "w", encoding="utf-8") as file:
+        json.dump(data, file, ensure_ascii=False, indent=2)
+    os.replace(temp_file, DB_FILE)
 
 
-def duration_days(duration, unit):
-    duration = max(0, safe_float(duration))
+def ensure_member_defaults(member):
+    member.setdefault("name", "")
+    member.setdefault("savings", 0.0)
+    member.setdefault("loan_principal", 0.0)
+    member.setdefault("loan_interest", 0.0)
+    member.setdefault("loan_type", "নাই")
+    member.setdefault("loan_date", "")
+    member.setdefault("loan_rate", 0.0)
+    member.setdefault("loan_duration", 0)
+    member.setdefault("loan_duration_unit", "Months")
+    member.setdefault("loan_status", "closed")
+    member.setdefault("loan_original_principal", 0.0)
+    member.setdefault("loan_original_interest", 0.0)
+    member.setdefault("loan_paid_principal", 0.0)
+    member.setdefault("loan_paid_interest", 0.0)
+    member.setdefault("loan_last_payment", member.get("loan_date", ""))
+    member.setdefault("loan_installment_count", 0)
+    member.setdefault("loan_total_installments", 0)
+    member.setdefault("loan_schedule", [])
+    member.setdefault("history", [])
+    if not isinstance(member["history"], list):
+        member["history"] = []
+    if not isinstance(member["loan_schedule"], list):
+        member["loan_schedule"] = []
+
+
+def add_history(member, text):
+    ensure_member_defaults(member)
+    member["history"].append(f"{now_str()} - {text}")
+
+
+def normalize_data(data):
+    for member in data.get("members", {}).values():
+        ensure_member_defaults(member)
+    return data
+
+
+def save_and_rerun(data):
+    save_data(data)
+    st.success("সফলভাবে সংরক্ষণ হয়েছে।")
+    st.rerun()
+
+
+# =========================================================
+# Loan calculations
+# =========================================================
+def duration_days(duration, unit, start_date=None):
+    start_date = start_date or date.today()
+    duration = max(int(duration), 0)
+
     if unit == "Days":
-        return max(1, int(round(duration)))
+        return duration
     if unit == "Weeks":
-        return max(1, int(round(duration * 7)))
-    return max(1, int(round(duration * 30.4375)))
+        return duration * 7
+    # Months: calendar month approximation for loan calculations.
+    return duration * 30
 
 
-def periodic_rate(annual_rate, unit):
-    annual_rate = max(0.0, safe_float(annual_rate)) / 100.0
+def period_days(unit):
     if unit == "Days":
-        return annual_rate / 365.0
+        return 1
     if unit == "Weeks":
-        return annual_rate / 52.0
-    return annual_rate / 12.0
+        return 7
+    return 30
 
 
-def calculate_reducing_emi(principal, annual_rate, duration, unit):
+def calculate_schedule(principal, annual_rate, duration, unit, start_dt):
     """
-    Fixed installment using reducing-balance interest.
-    Days -> daily periods, Weeks -> weekly periods, Months -> monthly periods.
+    Reducing-balance schedule.
+    Annual rate is converted to the actual installment period by days/365.
+    Principal is divided equally across installments; interest is calculated
+    on the opening principal balance of each installment period.
     """
-    p = max(0.0, safe_float(principal))
-    n = max(1, int(round(safe_float(duration))))
-    r = periodic_rate(annual_rate, unit)
+    principal = float(principal)
+    annual_rate = float(annual_rate)
+    duration = int(duration)
 
-    if p <= 0:
+    if principal <= 0 or duration <= 0:
+        return []
+
+    p_per_installment = principal / duration
+    p_balance = principal
+    schedule = []
+    pdays = period_days(unit)
+
+    for i in range(1, duration + 1):
+        interest = p_balance * (annual_rate / 100.0) * (pdays / 365.0)
+        principal_part = min(p_per_installment, p_balance)
+        installment = principal_part + interest
+
+        due_dt = start_dt + timedelta(days=pdays * i)
+
+        schedule.append(
+            {
+                "installment_no": i,
+                "due_date": due_dt.strftime("%Y-%m-%d"),
+                "principal": round(principal_part, 2),
+                "interest": round(interest, 2),
+                "installment": round(installment, 2),
+                "paid": 0.0,
+                "status": "বাকি",
+            }
+        )
+        p_balance -= principal_part
+
+    return schedule
+
+
+def outstanding_principal(member):
+    return max(float(member.get("loan_principal", 0.0)), 0.0)
+
+
+def elapsed_interest(member, settlement_dt=None):
+    """
+    Fair early-settlement interest:
+    charge only for actual elapsed days on the current outstanding principal,
+    instead of charging future scheduled interest.
+    """
+    settlement_dt = settlement_dt or datetime.now()
+
+    principal = outstanding_principal(member)
+    if principal <= 0:
         return 0.0
 
-    if r == 0:
-        return p / n
+    annual_rate = float(member.get("loan_rate", 0.0))
+    last_payment = parse_dt(member.get("loan_last_payment"))
+    loan_start = parse_dt(member.get("loan_date"))
 
-    emi = p * r * ((1 + r) ** n) / (((1 + r) ** n) - 1)
-    return emi
+    base_dt = last_payment or loan_start
+    if not base_dt:
+        return 0.0
+
+    elapsed = max((settlement_dt - base_dt).total_seconds() / 86400.0, 0.0)
+    return principal * (annual_rate / 100.0) * (elapsed / 365.0)
 
 
-def amortization_preview(principal, annual_rate, duration, unit):
-    """Return scheduled reducing-balance totals for display."""
-    p = max(0.0, safe_float(principal))
-    n = max(1, int(round(safe_float(duration))))
-    r = periodic_rate(annual_rate, unit)
-    emi = calculate_reducing_emi(p, annual_rate, n, unit)
+def remaining_scheduled_interest(member):
+    total = 0.0
+    for row in member.get("loan_schedule", []):
+        if row.get("status") != "পরিশোধ":
+            total += float(row.get("interest", 0.0))
+    return total
 
-    balance = p
-    total_interest = 0.0
-    rows = []
 
-    for period in range(1, n + 1):
-        interest = balance * r
-        principal_part = min(balance, max(0.0, emi - interest))
-        payment = interest + principal_part
-        balance = max(0.0, balance - principal_part)
-        total_interest += interest
-        rows.append({
-            "কিস্তি": period,
-            "কিস্তির পরিমাণ": payment,
-            "সুদ": interest,
-            "মূলধন": principal_part,
-            "অবশিষ্ট মূলধন": balance,
-        })
-        if balance <= 0.005:
+def mark_schedule_payment(member, amount):
+    """
+    Applies payment to oldest unpaid scheduled installments.
+    Interest is paid first, then principal.
+    """
+    amount = float(amount)
+    remaining = amount
+
+    for row in member.get("loan_schedule", []):
+        if remaining <= 0:
             break
 
-    return emi, total_interest, rows
+        due_interest = max(float(row.get("interest", 0.0)) - float(row.get("paid_interest", 0.0)), 0.0)
+        due_principal = max(float(row.get("principal", 0.0)) - float(row.get("paid_principal", 0.0)), 0.0)
 
+        interest_paid = min(remaining, due_interest)
+        remaining -= interest_paid
 
-def current_accrued_interest(info):
-    """Interest accrued since the last loan event, using reducing balance."""
-    principal = safe_float(info.get("loan_principal", 0))
-    rate = safe_float(info.get("loan_rate", 0))
-    unit = info.get("loan_duration_unit", "Months")
-    last_dt = parse_dt(info.get("loan_last_payment_date") or info.get("loan_date"))
+        principal_paid = min(remaining, due_principal)
+        remaining -= principal_paid
 
-    if principal <= 0 or rate <= 0 or not last_dt:
-        return 0.0, 0
+        row["paid_interest"] = round(float(row.get("paid_interest", 0.0)) + interest_paid, 2)
+        row["paid_principal"] = round(float(row.get("paid_principal", 0.0)) + principal_paid, 2)
+        row["paid"] = round(float(row.get("paid", 0.0)) + interest_paid + principal_paid, 2)
 
-    elapsed_days = max(0, (datetime.now() - last_dt).days)
-    if elapsed_days <= 0:
-        return 0.0, 0
+        if (
+            row["paid_interest"] >= float(row.get("interest", 0.0)) - 0.01
+            and row["paid_principal"] >= float(row.get("principal", 0.0)) - 0.01
+        ):
+            row["status"] = "পরিশোধ"
 
-    # Accrue continuously by day against current outstanding principal.
-    accrued = principal * (rate / 100.0) * (elapsed_days / 365.0)
-    return accrued, elapsed_days
+    return remaining
 
 
-def projected_due_amount(info):
-    accrued, _ = current_accrued_interest(info)
-    return max(0.0, safe_float(info.get("loan_principal", 0)) + accrued + safe_float(info.get("loan_interest", 0)))
-
-
-def member_options(data, active_only=False):
-    result = {}
-    for phone, raw in data.get("members", {}).items():
-        info = ensure_member_schema(raw)
-        if active_only and safe_float(info.get("loan_principal", 0)) <= 0:
-            continue
-        result[f"{info.get('name', 'সদস্য')} ({phone})"] = phone
-    return result
-
-
-def loan_is_active(info):
-    return safe_float(info.get("loan_principal", 0)) > 0.005
-
-
-def total_savings(data):
-    return sum(safe_float(m.get("savings", 0)) for m in data.get("members", {}).values())
-
-
-def total_principal(data):
-    return sum(safe_float(m.get("loan_principal", 0)) for m in data.get("members", {}).values())
-
-
-def total_loan_interest(data):
-    return sum(safe_float(m.get("loan_interest", 0)) for m in data.get("members", {}).values())
-
-
-# -----------------------------
-# Professional visual design
-# -----------------------------
-st.markdown(
-    """
-<style>
-@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+Bengali:wght@400;500;600;700;800&display=swap');
-
-html, body, [class*="css"] {
-    font-family: 'Noto Sans Bengali', sans-serif;
-}
-
-.stApp {
-    background:
-        radial-gradient(circle at 8% 8%, rgba(88, 170, 83, .12), transparent 28%),
-        radial-gradient(circle at 92% 16%, rgba(145, 205, 125, .13), transparent 25%),
-        linear-gradient(135deg, #f7fbf5 0%, #ffffff 48%, #f3faf2 100%);
-}
-
-.main .block-container {
-    padding-top: 1.4rem;
-    padding-bottom: 2rem;
-    max-width: 1250px;
-}
-
-section[data-testid="stSidebar"] {
-    background: linear-gradient(180deg, #f2faef 0%, #ffffff 52%, #edf8eb 100%);
-    border-right: 1px solid #d9ead5;
-}
-
-section[data-testid="stSidebar"] .block-container {
-    padding-top: 1.2rem;
-}
-
-.brand {
-    text-align: center;
-    padding: 8px 4px 18px;
-}
-
-.brand-logo {
-    width: 76px;
-    height: 76px;
-    margin: 0 auto 10px;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 38px;
-    background: linear-gradient(145deg, #2f7d32, #66ad55);
-    box-shadow: 0 10px 28px rgba(42, 103, 44, .22);
-    border: 5px solid #e9f5e5;
-}
-
-.brand h1 {
-    color: #176b2b;
-    font-size: 30px;
-    font-weight: 800;
-    margin: 0;
-}
-
-.brand p {
-    color: #5f6f63;
-    margin: 3px 0 0;
-    font-size: 13px;
-}
-
-.login-shell {
-    min-height: 84vh;
-    display: grid;
-    grid-template-columns: 1.05fr .95fr;
-    gap: 26px;
-    align-items: center;
-}
-
-.login-left {
-    position: relative;
-    min-height: 690px;
-    border-radius: 28px;
-    padding: 48px 40px;
-    overflow: hidden;
-    background:
-        radial-gradient(circle at 15% 18%, rgba(255,255,255,.9), transparent 24%),
-        linear-gradient(180deg, #eef9ea 0%, #dff1d8 55%, #c5e6bc 100%);
-    border: 1px solid #d5ead0;
-    box-shadow: 0 18px 50px rgba(46, 96, 50, .10);
-}
-
-.login-left:after {
-    content: "";
-    position: absolute;
-    left: -10%;
-    right: -10%;
-    bottom: -22%;
-    height: 55%;
-    border-radius: 50% 50% 0 0;
-    background: linear-gradient(180deg, #a7d995, #80bd73);
-    opacity: .65;
-}
-
-.login-copy {
-    position: relative;
-    z-index: 4;
-    text-align: center;
-}
-
-.login-copy .big-logo {
-    width: 96px;
-    height: 96px;
-    border-radius: 50%;
-    margin: 0 auto 18px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: #ffffff;
-    border: 7px solid #dcefd8;
-    box-shadow: 0 10px 26px rgba(39, 99, 42, .18);
-    font-size: 50px;
-}
-
-.login-copy h1 {
-    color: #17652a;
-    font-size: clamp(42px, 5vw, 68px);
-    line-height: 1.05;
-    margin: 0;
-    font-weight: 800;
-    letter-spacing: -1px;
-}
-
-.login-copy .tagline {
-    color: #52665a;
-    font-size: 21px;
-    margin-top: 12px;
-}
-
-.trust-pill {
-    display: inline-block;
-    margin-top: 18px;
-    padding: 9px 19px;
-    border-radius: 999px;
-    background: rgba(236, 249, 232, .9);
-    border: 1px solid #cfe9c9;
-    color: #3d7e3b;
-    font-weight: 600;
-}
-
-.landscape {
-    position: absolute;
-    z-index: 2;
-    left: -5%;
-    right: -5%;
-    bottom: 0;
-    height: 45%;
-}
-
-.hill-a, .hill-b {
-    position: absolute;
-    left: -10%;
-    width: 120%;
-    border-radius: 50% 50% 0 0;
-}
-
-.hill-a {
-    bottom: 5%;
-    height: 46%;
-    background: #b8dfa9;
-}
-
-.hill-b {
-    bottom: -8%;
-    height: 48%;
-    background: #86c776;
-}
-
-.house-row {
-    position: absolute;
-    z-index: 5;
-    bottom: 15%;
-    left: 16%;
-    right: 16%;
-    display: flex;
-    justify-content: center;
-    gap: 14px;
-    align-items: flex-end;
-}
-
-.house {
-    width: 92px;
-    height: 68px;
-    background: #f8f2dd;
-    border: 3px solid #a98e61;
-    position: relative;
-    border-radius: 4px;
-}
-
-.house:before {
-    content: "";
-    position: absolute;
-    left: -9px;
-    top: -28px;
-    border-left: 55px solid transparent;
-    border-right: 55px solid transparent;
-    border-bottom: 30px solid #826744;
-}
-
-.house:after {
-    content: "";
-    position: absolute;
-    width: 18px;
-    height: 28px;
-    left: 35px;
-    bottom: 0;
-    background: #9c7a50;
-}
-
-.tree {
-    position: absolute;
-    z-index: 6;
-    left: 39%;
-    bottom: 17%;
-    width: 18px;
-    height: 105px;
-    background: #795433;
-    border-radius: 8px;
-}
-
-.tree:before {
-    content: "";
-    position: absolute;
-    width: 115px;
-    height: 115px;
-    left: -49px;
-    top: -82px;
-    border-radius: 50%;
-    background: #4e9c45;
-    box-shadow: 36px 12px 0 #65ad51, -24px 25px 0 #5da84c;
-}
-
-.feature-row {
-    position: relative;
-    z-index: 8;
-    margin-top: 330px;
-    background: rgba(255,255,255,.92);
-    border: 1px solid #e1eee0;
-    border-radius: 22px;
-    padding: 20px 10px;
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    box-shadow: 0 14px 35px rgba(38, 83, 40, .12);
-}
-
-.feature {
-    text-align: center;
-    padding: 5px 10px;
-    border-right: 1px solid #e6eee4;
-}
-
-.feature:last-child { border-right: 0; }
-
-.feature .icon { font-size: 28px; }
-
-.feature b {
-    display: block;
-    color: #254d2b;
-    margin-top: 4px;
-    font-size: 14px;
-}
-
-.feature span {
-    color: #718076;
-    font-size: 11px;
-}
-
-.login-card {
-    background: rgba(255,255,255,.96);
-    border: 1px solid #e5ece4;
-    border-radius: 28px;
-    padding: 38px 42px 30px;
-    box-shadow: 0 22px 65px rgba(32, 73, 35, .14);
-}
-
-.login-icon {
-    width: 78px;
-    height: 78px;
-    margin: 0 auto 14px;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: #eaf6e6;
-    border: 1px solid #d5ebd0;
-    font-size: 34px;
-}
-
-.login-card h2 {
-    text-align: center;
-    color: #14233a;
-    font-size: 34px;
-    margin: 0;
-}
-
-.login-card .sub {
-    text-align: center;
-    color: #758078;
-    margin: 8px 0 28px;
-}
-
-.login-footer {
-    text-align: center;
-    color: #6d7770;
-    font-size: 12px;
-    margin-top: 22px;
-}
-
-div.stButton > button {
-    border-radius: 11px;
-    min-height: 44px;
-    font-weight: 600;
-}
-
-.login-card div.stButton > button[kind="primary"] {
-    background: linear-gradient(135deg, #2d8b39, #55ae49);
-    border: 0;
-    color: white;
-    min-height: 50px;
-    font-size: 17px;
-}
-
-.page-title {
-    background: linear-gradient(135deg, #ffffff, #f1f9ef);
-    border: 1px solid #e0ecde;
-    border-radius: 18px;
-    padding: 17px 22px;
-    margin-bottom: 18px;
-    box-shadow: 0 8px 24px rgba(48, 91, 51, .06);
-}
-
-.page-title h1 {
-    margin: 0;
-    color: #205c2a;
-    font-size: 28px;
-}
-
-.page-title p {
-    margin: 4px 0 0;
-    color: #718078;
-    font-size: 13px;
-}
-
-.metric-card {
-    background: white;
-    border: 1px solid #e4eee1;
-    border-radius: 18px;
-    padding: 18px;
-    box-shadow: 0 8px 25px rgba(48, 91, 51, .06);
-}
-
-.metric-card .label {
-    color: #718078;
-    font-size: 13px;
-}
-
-.metric-card .value {
-    color: #1f682b;
-    font-size: 27px;
-    font-weight: 800;
-    margin-top: 5px;
-}
-
-.member-card {
-    background: #fff;
-    border: 1px solid #e4eee1;
-    border-radius: 16px;
-    padding: 16px;
-    margin: 9px 0;
-    box-shadow: 0 5px 18px rgba(48, 91, 51, .05);
-}
-
-.section-card {
-    background: #ffffff;
-    border: 1px solid #e4eee1;
-    border-radius: 20px;
-    padding: 22px;
-    margin-bottom: 18px;
-    box-shadow: 0 8px 25px rgba(48, 91, 51, .05);
-}
-
-.stTextInput input, .stNumberInput input, .stDateInput input,
-.stSelectbox div[data-baseweb="select"], .stTextArea textarea {
-    border-radius: 10px !important;
-}
-
-.sidebar-note {
-    margin-top: 16px;
-    padding: 12px;
-    border-radius: 13px;
-    background: #eaf6e7;
-    border: 1px solid #d5eacf;
-    color: #54725a;
-    font-size: 12px;
-    text-align: center;
-}
-
-@media (max-width: 900px) {
-    .login-shell { grid-template-columns: 1fr; }
-    .login-left { min-height: 580px; }
-    .feature-row { margin-top: 250px; }
-}
-
-@media (max-width: 600px) {
-    .login-left { padding: 28px 15px; min-height: 510px; }
-    .login-card { padding: 28px 20px; }
-    .login-copy h1 { font-size: 43px; }
-    .feature-row { grid-template-columns: repeat(2, 1fr); }
-    .feature:nth-child(2) { border-right: 0; }
-    .feature:nth-child(-n+2) { border-bottom: 1px solid #e6eee4; padding-bottom: 12px; }
-}
-</style>
-""",
-    unsafe_allow_html=True,
-)
-
-# -----------------------------
-# Session state
-# -----------------------------
-if "logged_in" not in st.session_state:
-    st.session_state.logged_in = False
-
-if "page" not in st.session_state:
-    st.session_state.page = MENU_ITEMS[0]
-
-
-# ============================================================
+# =========================================================
 # Login
-# ============================================================
+# =========================================================
 def login_page():
-    st.markdown(
-        """
-<div class="login-shell">
-  <div class="login-left">
-    <div class="login-copy">
-      <div class="big-logo">🌿</div>
-      <h1>আমার সমিতি</h1>
-      <div class="tagline">আপনার সমিতি, আপনার উন্নতি</div>
-      <div class="trust-pill">🛡️ নিরাপদ • সহজ • স্মার্ট সমাধান</div>
-    </div>
+    apply_css()
 
-    <div class="landscape">
-      <div class="hill-a"></div>
-      <div class="hill-b"></div>
-      <div class="tree"></div>
-      <div class="house-row">
-        <div class="house"></div>
-        <div class="house"></div>
-        <div class="house"></div>
-        <div class="house"></div>
-      </div>
-    </div>
+    st.markdown('<div class="login-shell">', unsafe_allow_html=True)
+    left, right = st.columns([1.05, 0.95], gap="large")
 
-    <div class="feature-row">
-      <div class="feature">
-        <div class="icon">👥</div>
-        <b>সদস্য ব্যবস্থাপনা</b>
-        <span>সহজে সদস্য যোগ ও তালিকা</span>
-      </div>
-      <div class="feature">
-        <div class="icon">🐷</div>
-        <b>সঞ্চয় ব্যবস্থাপনা</b>
-        <span>সঞ্চয় জমা ও উত্তোলন</span>
-      </div>
-      <div class="feature">
-        <div class="icon">💰</div>
-        <b>ঋণ ব্যবস্থাপনা</b>
-        <span>ঋণ, কিস্তি ও হিসাব</span>
-      </div>
-      <div class="feature">
-        <div class="icon">📊</div>
-        <b>রিপোর্ট ও স্টেটমেন্ট</b>
-        <span>স্বচ্ছ হিসাব ও রিপোর্ট</span>
-      </div>
-    </div>
-  </div>
+    with left:
+        st.markdown(
+            """
+            <div class="brand-panel">
+                <div class="brand-icon">🌿</div>
+                <div class="brand-title">আমার সমিতি</div>
+                <div class="brand-subtitle">আপনার সমিতি, আপনার উন্নতি</div>
+                <div class="secure-pill">🛡️ নিরাপদ · সহজ · স্মার্ট সমাধান</div>
 
-  <div class="login-card">
-    <div class="login-icon">🔒</div>
-    <h2>Admin Login</h2>
-    <div class="sub">অনুগ্রহ করে আপনার অ্যাকাউন্ট দিয়ে লগইন করুন</div>
-    """,
-        unsafe_allow_html=True,
-    )
+                <div class="feature-grid">
+                    <div class="feature">
+                        <div class="feature-icon">👥</div>
+                        <div class="feature-title">সদস্য ব্যবস্থাপনা</div>
+                        <div class="feature-text">সহজে সদস্য যোগ ও তালিকা</div>
+                    </div>
+                    <div class="feature">
+                        <div class="feature-icon">🐷</div>
+                        <div class="feature-title">সঞ্চয় ব্যবস্থাপনা</div>
+                        <div class="feature-text">সঞ্চয় জমা ও হিসাব</div>
+                    </div>
+                    <div class="feature">
+                        <div class="feature-icon">💰</div>
+                        <div class="feature-title">ঋণ ব্যবস্থাপনা</div>
+                        <div class="feature-text">ঋণ, কিস্তি ও হিসাব</div>
+                    </div>
+                    <div class="feature">
+                        <div class="feature-icon">📊</div>
+                        <div class="feature-title">রিপোর্ট ও স্টেটমেন্ট</div>
+                        <div class="feature-text">স্বচ্ছ হিসাব ও রিপোর্ট</div>
+                    </div>
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
 
-    with st.form("secure_login_form"):
+    with right:
+        st.markdown(
+            """
+            <div class="login-card">
+                <div class="login-lock">🔐</div>
+                <div class="login-title">Admin Login</div>
+                <div class="login-help">অনুগ্রহ করে আপনার অ্যাকাউন্ট দিয়ে লগইন করুন</div>
+            """,
+            unsafe_allow_html=True,
+        )
+
         username = st.text_input("Username", placeholder="আপনার ইউজারনেম লিখুন")
-        password = st.text_input("Password", type="password", placeholder="আপনার পাসওয়ার্ড লিখুন")
-        remember = st.checkbox("আমাকে মনে রাখুন", value=False)
-        submitted = st.form_submit_button("🔐  লগইন করুন", type="primary", use_container_width=True)
+        password = st.text_input(
+            "Password",
+            type="password",
+            placeholder="আপনার পাসওয়ার্ড লিখুন",
+        )
+        remember = st.checkbox("আমাকে মনে রাখুন")
 
-        if submitted:
+        if st.button("🔐  লগইন করুন", use_container_width=True, type="primary"):
             if username.strip() == ADMIN_USER and password == ADMIN_PASS:
-                st.session_state.logged_in = True
-                st.session_state.remember_login = remember
-                st.session_state.page = MENU_ITEMS[0]
+                st.session_state["logged_in"] = True
+                st.session_state["remember"] = remember
                 st.rerun()
             else:
                 st.error("ইউজারনেম অথবা পাসওয়ার্ড সঠিক নয়।")
 
-    st.markdown(
-        """
-    <div class="login-footer">
-      🔒 আপনার তথ্য নিরাপদ ও গোপন রাখা হয়<br><br>
-      © 2026 আমার সমিতি • সর্বস্বত্ব সংরক্ষিত
-    </div>
-    </div>
-</div>
-""",
-        unsafe_allow_html=True,
-    )
-
-
-# ============================================================
-# Common UI
-# ============================================================
-def page_header(title, subtitle):
-    st.markdown(
-        f"""
-<div class="page-title">
-  <h1>{title}</h1>
-  <p>{subtitle}</p>
-</div>
-""",
-        unsafe_allow_html=True,
-    )
-
-
-def member_select(data, label, active_only=False, key=None):
-    options = member_options(data, active_only=active_only)
-    if not options:
-        st.warning("কোনো উপযুক্ত সদস্য পাওয়া যায়নি।")
-        return None
-    selected = st.selectbox(label, list(options.keys()), key=key)
-    return options[selected]
-
-
-def sidebar():
-    with st.sidebar:
         st.markdown(
             """
-<div class="brand">
-  <div class="brand-logo">🌿</div>
-  <h1>আমার সমিতি</h1>
-  <p>Micro-Finance Management</p>
-</div>
-""",
-            unsafe_allow_html=True,
-        )
-
-        st.markdown("---")
-
-        current_index = MENU_ITEMS.index(st.session_state.page) if st.session_state.page in MENU_ITEMS else 0
-        selected = st.radio(
-            "মেনু",
-            MENU_ITEMS,
-            index=current_index,
-            key="sidebar_menu",
-        )
-        st.session_state.page = selected
-
-        st.markdown("---")
-
-        if st.button("🔒 নিরাপদ লগআউট", use_container_width=True):
-            st.session_state.logged_in = False
-            st.rerun()
-
-        st.markdown(
-            """
-<div class="sidebar-note">
-  🔐 নিরাপদ ব্যবস্থাপনা<br>
-  📅 স্বয়ংক্রিয় তারিখ ও সময় সংরক্ষণ
-</div>
-""",
+                <div style="text-align:center;color:#7a847b;margin-top:25px;font-size:13px;">
+                    🔒 আপনার তথ্য নিরাপদ ও গোপন রাখা হবে
+                </div>
+                <div style="text-align:center;color:#8a938b;margin-top:18px;font-size:13px;">
+                    © 2026 আমার সমিতি · সর্বস্বত্ব সংরক্ষিত
+                </div>
+            </div>
+            """,
             unsafe_allow_html=True,
         )
 
 
-# ============================================================
-# Page 1 — Dashboard
-# ============================================================
+# =========================================================
+# Shared UI helpers
+# =========================================================
+def page_header(title, subtitle=""):
+    st.markdown(f'<h1 class="page-title">{title}</h1>', unsafe_allow_html=True)
+    if subtitle:
+        st.markdown(f'<div class="page-subtitle">{subtitle}</div>', unsafe_allow_html=True)
+
+
+def member_options(data):
+    members = data.get("members", {})
+    return list(members.keys())
+
+
+def member_label(member_id, member):
+    return f"{member.get('name', 'নাম নেই')} — {member_id}"
+
+
+# =========================================================
+# Page 1: Dashboard
+# =========================================================
 def dashboard_page(data):
-    page_header("📊 ড্যাশবোর্ড ও সদস্য তালিকা", "সমিতির বর্তমান সদস্য, সঞ্চয় ও ঋণের সারসংক্ষেপ")
+    page_header("🏠 ড্যাশবোর্ড", "সমিতির বর্তমান আর্থিক অবস্থার সংক্ষিপ্ত চিত্র")
 
     members = data.get("members", {})
-    active_loans = sum(1 for m in members.values() if loan_is_active(m))
+    total_members = len(members)
+    total_savings = sum(float(m.get("savings", 0)) for m in members.values())
+    total_loan = sum(float(m.get("loan_principal", 0)) for m in members.values())
+    active_loans = sum(
+        1 for m in members.values() if float(m.get("loan_principal", 0)) > 0.009
+    )
 
     c1, c2, c3, c4 = st.columns(4)
-    with c1:
-        st.markdown(f'<div class="metric-card"><div class="label">মোট সদস্য</div><div class="value">{len(members)}</div></div>', unsafe_allow_html=True)
-    with c2:
-        st.markdown(f'<div class="metric-card"><div class="label">মোট সঞ্চয়</div><div class="value">{money(total_savings(data))}</div></div>', unsafe_allow_html=True)
-    with c3:
-        st.markdown(f'<div class="metric-card"><div class="label">চলতি ঋণের মূলধন</div><div class="value">{money(total_principal(data))}</div></div>', unsafe_allow_html=True)
-    with c4:
-        st.markdown(f'<div class="metric-card"><div class="label">চলতি ঋণ</div><div class="value">{active_loans}</div></div>', unsafe_allow_html=True)
+    metrics = [
+        ("👥 মোট সদস্য", total_members),
+        ("💰 মোট সঞ্চয়", money(total_savings)),
+        ("💸 বকেয়া ঋণ", money(total_loan)),
+        ("📌 চলমান ঋণ", active_loans),
+    ]
+
+    for col, (label, value) in zip([c1, c2, c3, c4], metrics):
+        with col:
+            st.markdown(
+                f"""
+                <div class="metric-card">
+                    <div class="metric-label">{label}</div>
+                    <div class="metric-value">{value}</div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
 
     st.write("")
+    left, right = st.columns(2)
 
-    if not members:
-        st.info("বর্তমানে কোনো সদস্য নিবন্ধিত নেই। বাম পাশের মেনু থেকে নতুন সদস্য যুক্ত করুন।")
-        return
-
-    st.markdown("### 👥 সদস্য তালিকা")
-
-    search = st.text_input("🔎 সদস্যের নাম বা মোবাইল দিয়ে খুঁজুন", placeholder="যেমন: Mehedi বা 017...")
-    shown = 0
-
-    for phone, raw in members.items():
-        info = ensure_member_schema(raw)
-        query = search.strip().lower()
-
-        if query and query not in str(phone).lower() and query not in str(info.get("name", "")).lower():
-            continue
-
-        loan = safe_float(info.get("loan_principal", 0))
-        status = "🟢 চলতি" if loan_is_active(info) else "⚪ ঋণ নেই"
-
-        st.markdown(
-            f"""
-<div class="member-card">
-<b>👤 {info.get('name', 'নাম নেই')}</b> &nbsp; <span style="color:#758078">📱 {phone}</span><br>
-<span style="color:#54725a">💰 সঞ্চয়: <b>{money(info.get('savings', 0))}</b></span>
-&nbsp;&nbsp; | &nbsp;&nbsp;
-<span style="color:#7a5b35">📉 ঋণের মূলধন: <b>{money(loan)}</b></span>
-&nbsp;&nbsp; | &nbsp;&nbsp;
-{status}
-</div>
-""",
-            unsafe_allow_html=True,
-        )
-        shown += 1
-
-    if shown == 0:
-        st.info("আপনার দেওয়া অনুসন্ধানের সাথে কোনো সদস্য পাওয়া যায়নি।")
-
-
-# ============================================================
-# Page 2 — New member
-# ============================================================
-def new_member_page(data):
-    page_header("➕ নতুন সদস্য যুক্ত করুন", "নতুন সদস্যের হিসাব খুলুন এবং প্রাথমিক সঞ্চয় সংরক্ষণ করুন")
-
-    with st.container():
+    with left:
         st.markdown('<div class="section-card">', unsafe_allow_html=True)
-        col1, col2 = st.columns(2)
+        st.subheader("👥 সদস্যদের তালিকা")
+        if members:
+            rows = []
+            for mid, m in members.items():
+                rows.append(
+                    {
+                        "সদস্য": m.get("name", ""),
+                        "মোবাইল": mid,
+                        "সঞ্চয়": float(m.get("savings", 0)),
+                        "ঋণ বকেয়া": float(m.get("loan_principal", 0)),
+                        "অবস্থা": "ঋণ চলমান" if float(m.get("loan_principal", 0)) > 0.009 else "ঋণ নেই",
+                    }
+                )
+            st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+        else:
+            st.info("এখনও কোনো সদস্য যোগ করা হয়নি।")
+        st.markdown("</div>", unsafe_allow_html=True)
 
-        with col1:
-            phone = st.text_input("📱 সদস্যের মোবাইল নম্বর", placeholder="01XXXXXXXXX")
-            name = st.text_input("👤 সদস্যের পূর্ণ নাম", placeholder="সদস্যের নাম")
+    with right:
+        st.markdown('<div class="section-card">', unsafe_allow_html=True)
+        st.subheader("🕐 সাম্প্রতিক লেনদেন")
+        transactions = []
+        for mid, m in members.items():
+            for item in m.get("history", [])[-5:]:
+                transactions.append(
+                    {
+                        "মোবাইল": mid,
+                        "সদস্য": m.get("name", ""),
+                        "লেনদেন": item,
+                    }
+                )
 
-        with col2:
+        if transactions:
+            transactions = transactions[-10:][::-1]
+            st.dataframe(pd.DataFrame(transactions), use_container_width=True, hide_index=True)
+        else:
+            st.info("কোনো transaction history নেই।")
+        st.markdown("</div>", unsafe_allow_html=True)
+
+
+# =========================================================
+# Page 2: Member management
+# =========================================================
+def member_management_page(data):
+    page_header("👥 সদস্য ব্যবস্থাপনা", "নতুন সদস্য যোগ করুন অথবা সদস্যের তথ্য দেখুন")
+
+    tab1, tab2 = st.tabs(["➕ নতুন সদস্য", "📋 সদস্য তালিকা"])
+
+    with tab1:
+        with st.form("add_member_form", clear_on_submit=True):
+            c1, c2 = st.columns(2)
+            with c1:
+                mobile = st.text_input("মোবাইল নম্বর", placeholder="017XXXXXXXX")
+            with c2:
+                name = st.text_input("সদস্যের নাম", placeholder="পূর্ণ নাম")
+
             initial_savings = st.number_input(
-                "💵 প্রাথমিক সঞ্চয় (টাকা)",
+                "প্রাথমিক সঞ্চয়",
                 min_value=0.0,
                 step=100.0,
                 value=0.0,
             )
-            opening_date = st.date_input("📅 হিসাব খোলার তারিখ", value=date.today())
 
-        st.markdown("</div>", unsafe_allow_html=True)
+            submitted = st.form_submit_button("💾 সদস্য সংরক্ষণ", use_container_width=True)
 
-        if st.button("💾 সদস্যের হিসাব তৈরি করুন", type="primary", use_container_width=True):
-            phone = phone.strip()
+        if submitted:
+            mobile = mobile.strip()
             name = name.strip()
 
-            if not phone or not name:
-                st.warning("দয়া করে সদস্যের নাম এবং মোবাইল নম্বর দিন।")
-            elif not phone.isdigit() or len(phone) < 10:
-                st.warning("সঠিক মোবাইল নম্বর দিন।")
-            elif phone in data["members"]:
-                st.error("এই মোবাইল নম্বরে ইতিমধ্যে একজন সদস্য আছেন।")
+            if not mobile or not name:
+                st.error("মোবাইল নম্বর এবং সদস্যের নাম দিন।")
+            elif mobile in data["members"]:
+                st.error("এই মোবাইল নম্বর দিয়ে সদস্য ইতিমধ্যে আছে।")
             else:
-                timestamp = datetime.combine(opening_date, datetime.now().time()).strftime("%Y-%m-%d %H:%M:%S")
-                info = {
+                data["members"][mobile] = {
                     "name": name,
-                    "savings": initial_savings,
+                    "savings": float(initial_savings),
                     "loan_principal": 0.0,
                     "loan_interest": 0.0,
                     "loan_type": "নাই",
-                    "loan_date": timestamp,
+                    "loan_date": "",
                     "loan_rate": 0.0,
                     "loan_duration": 0,
                     "loan_duration_unit": "Months",
-                    "loan_status": "Closed",
-                    "loan_last_payment_date": "",
+                    "loan_status": "closed",
                     "loan_original_principal": 0.0,
-                    "loan_total_interest_charged": 0.0,
-                    "loan_total_paid": 0.0,
-                    "loan_installment": 0.0,
-                    "loan_expected_total": 0.0,
-                    "loan_next_due_date": "",
-                    "history": [
-                        f"{timestamp} - হিসাব খোলা হয়েছে। প্রাথমিক সঞ্চয় {money(initial_savings)}।"
-                    ],
+                    "loan_original_interest": 0.0,
+                    "loan_paid_principal": 0.0,
+                    "loan_paid_interest": 0.0,
+                    "loan_last_payment": "",
+                    "loan_installment_count": 0,
+                    "loan_total_installments": 0,
+                    "loan_schedule": [],
+                    "history": [],
                 }
-                data["members"][phone] = info
-                save_data(data)
-                st.success(f"🎉 {name}-এর সদস্য হিসাব সফলভাবে তৈরি হয়েছে।")
-                st.rerun()
 
+                add_history(
+                    data["members"][mobile],
+                    f"হিসাব খোলা হয়েছে। প্রাথমিক সঞ্চয়: {money(initial_savings)}",
+                )
+                save_and_rerun(data)
 
-# ============================================================
-# Page 3 — Savings
-# ============================================================
-def savings_page(data):
-    page_header("💰 কিস্তি বা টাকা জমা নিন", "সদস্যের সঞ্চয়/কিস্তির টাকা গ্রহণ করুন এবং সঙ্গে সঙ্গে হিসাব আপডেট করুন")
-
-    phone = member_select(data, "📞 সদস্য নির্বাচন করুন", key="savings_member")
-    if not phone:
-        return
-
-    info = ensure_member_schema(data["members"][phone])
-
-    c1, c2 = st.columns(2)
-    with c1:
-        st.markdown(
-            f'<div class="metric-card"><div class="label">সদস্য</div><div class="value" style="font-size:20px">{info["name"]}</div></div>',
-            unsafe_allow_html=True,
-        )
-    with c2:
-        st.markdown(
-            f'<div class="metric-card"><div class="label">বর্তমান সঞ্চয়</div><div class="value">{money(info["savings"])}</div></div>',
-            unsafe_allow_html=True,
-        )
-
-    st.write("")
-
-    amount = st.number_input("💵 জমার পরিমাণ (টাকা)", min_value=0.0, step=100.0, value=0.0)
-    note = st.text_input("📝 নোট (ঐচ্ছিক)", placeholder="যেমন: সাপ্তাহিক সঞ্চয়")
-
-    if st.button("✔️ জমা গ্রহণ করুন", type="primary", use_container_width=True):
-        if amount <= 0:
-            st.warning("জমার পরিমাণ ০-এর বেশি হতে হবে।")
-        else:
-            info["savings"] += amount
-            message = f"সঞ্চয় জমা: +{money(amount)}"
-            if note.strip():
-                message += f" — {note.strip()}"
-            add_history(info, message)
-            save_data(data)
-            st.success(f"✅ {money(amount)} সঞ্চয় সফলভাবে জমা হয়েছে।")
-            st.rerun()
-
-
-# ============================================================
-# Page 4 — Loan disbursement
-# ============================================================
-def loan_page(data):
-    page_header("💸 ঋণ বা লোন বিতরণ (Loan)", "Reducing Balance পদ্ধতিতে নতুন ঋণ তৈরি করুন")
-
-    phone = member_select(data, "📞 ঋণগ্রহীতা সদস্য নির্বাচন করুন", key="loan_member")
-    if not phone:
-        return
-
-    info = ensure_member_schema(data["members"][phone])
-
-    if loan_is_active(info):
-        st.warning(f"এই সদস্যের একটি চলতি ঋণ আছে: {money(info['loan_principal'])} মূলধন। নতুন ঋণ দেওয়ার আগে সেটি নিষ্পত্তি করুন।")
-        return
-
-    st.markdown(
-        f'<div class="section-card"><b>👤 {info["name"]}</b><br>📱 {phone}<br>💰 বর্তমান সঞ্চয়: {money(info["savings"])}</div>',
-        unsafe_allow_html=True,
-    )
-
-    c1, c2 = st.columns(2)
-    with c1:
-        principal = st.number_input("💵 ঋণের পরিমাণ (মূলধন)", min_value=0.0, step=1000.0, value=0.0)
-        loan_type = st.text_input("🏷️ ঋণের ধরন", value="সাধারণ ঋণ")
-
-    with c2:
-        annual_rate = st.number_input("📊 বার্ষিক সুদের হার (%)", min_value=0.0, max_value=100.0, value=10.0, step=0.5)
-        duration_unit = st.selectbox("⏱️ সময়ের একক", ["Days", "Weeks", "Months"])
-
-    duration = st.number_input(
-        f"📅 ঋণের মেয়াদ ({duration_unit})",
-        min_value=1,
-        max_value=1000,
-        value=10 if duration_unit == "Months" else (10 if duration_unit == "Weeks" else 30),
-        step=1,
-    )
-
-    if principal > 0:
-        emi, scheduled_interest, schedule = amortization_preview(
-            principal, annual_rate, duration, duration_unit
-        )
-        st.markdown(
-            f"""
-<div class="section-card">
-<b>📉 Reducing Balance হিসাব</b><br><br>
-প্রতি {duration_unit.lower()} কিস্তি: <b>{money(emi)}</b><br>
-আনুমানিক মোট সুদ: <b>{money(scheduled_interest)}</b><br>
-আনুমানিক মোট পরিশোধ: <b>{money(principal + scheduled_interest)}</b><br>
-মেয়াদ: <b>{duration} {duration_unit}</b>
-</div>
-""",
-            unsafe_allow_html=True,
-        )
-
-        with st.expander("📋 কিস্তির পূর্ণ হিসাব দেখুন"):
-            import pandas as pd
-            df = pd.DataFrame(schedule)
-            for col in ["কিস্তির পরিমাণ", "সুদ", "মূলধন", "অবশিষ্ট মূলধন"]:
-                df[col] = df[col].map(lambda x: round(x, 2))
-            st.dataframe(df, use_container_width=True, hide_index=True)
-
-    if st.button("🚀 ঋণ অনুমোদন ও বিতরণ করুন", type="primary", use_container_width=True):
-        if principal <= 0:
-            st.warning("ঋণের পরিমাণ ০-এর বেশি হতে হবে।")
+    with tab2:
+        if not data["members"]:
+            st.info("এখনও কোনো সদস্য নেই।")
             return
 
-        timestamp = now_text()
-        emi, scheduled_interest, _ = amortization_preview(
-            principal, annual_rate, duration, duration_unit
-        )
+        rows = []
+        for mid, m in data["members"].items():
+            rows.append(
+                {
+                    "নাম": m.get("name", ""),
+                    "মোবাইল": mid,
+                    "সঞ্চয়": float(m.get("savings", 0)),
+                    "ঋণ বকেয়া": float(m.get("loan_principal", 0)),
+                    "ঋণের হার %": float(m.get("loan_rate", 0)),
+                    "ঋণ অবস্থা": "চলমান" if float(m.get("loan_principal", 0)) > 0.009 else "নেই",
+                }
+            )
 
-        info["loan_principal"] = principal
-        info["loan_interest"] = 0.0
-        info["loan_type"] = loan_type.strip() or "সাধারণ ঋণ"
-        info["loan_date"] = timestamp
-        info["loan_rate"] = annual_rate
-        info["loan_duration"] = duration
-        info["loan_duration_unit"] = duration_unit
-        info["loan_status"] = "Active"
-        info["loan_last_payment_date"] = timestamp
-        info["loan_original_principal"] = principal
-        info["loan_total_interest_charged"] = 0.0
-        info["loan_total_paid"] = 0.0
-        info["loan_installment"] = emi
-        info["loan_expected_total"] = principal + scheduled_interest
-
-        add_history(
-            info,
-            f"ঋণ বিতরণ: {money(principal)}; ধরন: {info['loan_type']}; "
-            f"হার: {annual_rate:.2f}% বার্ষিক; মেয়াদ: {duration} {duration_unit}; "
-            f"Red.-Balance কিস্তি: {money(emi)}।"
-        )
-
-        save_data(data)
-        st.success(f"✅ {money(principal)} ঋণ সফলভাবে বিতরণ করা হয়েছে।")
-        st.rerun()
+        st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
 
 
-# ============================================================
-# Page 5 — Loan collection + early settlement
-# ============================================================
-def loan_collection_page(data):
-    page_header("📉 ঋণের টাকা বা কিস্তি আদায়", "Reducing Balance অনুযায়ী কিস্তি গ্রহণ, সুদ হিসাব এবং Early Settlement")
+# =========================================================
+# Page 3: Savings deposit
+# =========================================================
+def savings_page(data):
+    page_header("💰 সঞ্চয় জমা", "সদস্যের সঞ্চয় হিসাব বাড়ান এবং transaction history সংরক্ষণ করুন")
 
-    phone = member_select(data, "📞 চলতি ঋণ থাকা সদস্য নির্বাচন করুন", active_only=True, key="collection_member")
-    if not phone:
-        st.info("বর্তমানে কোনো সক্রিয় ঋণ নেই।")
+    if not data["members"]:
+        st.warning("প্রথমে সদস্য ব্যবস্থাপনা থেকে সদস্য যোগ করুন।")
         return
 
-    info = ensure_member_schema(data["members"][phone])
+    ids = member_options(data)
+    selected = st.selectbox(
+        "সদস্য নির্বাচন করুন",
+        ids,
+        format_func=lambda x: member_label(x, data["members"][x]),
+    )
+    member = data["members"][selected]
 
-    accrued, elapsed = current_accrued_interest(info)
-    principal = safe_float(info.get("loan_principal", 0))
-    stored_interest = safe_float(info.get("loan_interest", 0))
-    current_due = principal + stored_interest + accrued
-
-    c1, c2, c3, c4 = st.columns(4)
+    c1, c2 = st.columns(2)
     with c1:
-        st.markdown(f'<div class="metric-card"><div class="label">মূলধন বাকি</div><div class="value">{money(principal)}</div></div>', unsafe_allow_html=True)
+        st.info(f"বর্তমান সঞ্চয়: **{money(member.get('savings', 0))}**")
     with c2:
-        st.markdown(f'<div class="metric-card"><div class="label">এখন পর্যন্ত বকেয়া সুদ</div><div class="value">{money(stored_interest + accrued)}</div></div>', unsafe_allow_html=True)
-    with c3:
-        st.markdown(f'<div class="metric-card"><div class="label">আনুমানিক বর্তমান পাওনা</div><div class="value">{money(current_due)}</div></div>', unsafe_allow_html=True)
-    with c4:
-        st.markdown(f'<div class="metric-card"><div class="label">শেষ লেনদেন থেকে</div><div class="value">{elapsed} দিন</div></div>', unsafe_allow_html=True)
+        st.info(f"মোবাইল: **{selected}**")
 
-    st.write("")
+    with st.form("savings_form"):
+        amount = st.number_input(
+            "সঞ্চয়ের পরিমাণ",
+            min_value=1.0,
+            step=100.0,
+            value=100.0,
+        )
+        note = st.text_input("নোট (ঐচ্ছিক)", placeholder="যেমন: সাপ্তাহিক সঞ্চয়")
+        submit = st.form_submit_button("💰 সঞ্চয় জমা করুন", use_container_width=True)
 
-    st.markdown(
-        f"""
-<div class="section-card">
-<b>👤 {info["name"]}</b> &nbsp; 📱 {phone}<br>
-ঋণের ধরন: <b>{info.get("loan_type", "সাধারণ ঋণ")}</b> &nbsp; | &nbsp;
-হার: <b>{safe_float(info.get("loan_rate", 0)):.2f}%</b> &nbsp; | &nbsp;
-মেয়াদ: <b>{info.get("loan_duration", 0)} {info.get("loan_duration_unit", "Months")}</b><br>
-নির্ধারিত কিস্তি: <b>{money(info.get("loan_installment", 0))}</b>
-</div>
-""",
-        unsafe_allow_html=True,
+    if submit:
+        member["savings"] = round(float(member.get("savings", 0)) + amount, 2)
+        text = f"সঞ্চয় জমা: {money(amount)}"
+        if note.strip():
+            text += f" — {note.strip()}"
+        add_history(member, text)
+        save_and_rerun(data)
+
+
+# =========================================================
+# Page 4: Loan disbursement
+# =========================================================
+def loan_page(data):
+    page_header(
+        "💸 ঋণ প্রদান",
+        "Days / Weeks / Months অনুযায়ী reducing-balance installment schedule তৈরি করুন",
     )
 
-    st.markdown("### 💳 কিস্তি / আংশিক পরিশোধ")
+    if not data["members"]:
+        st.warning("প্রথমে সদস্য যোগ করুন।")
+        return
 
-    repay = st.number_input(
-        "💵 আজ কত টাকা গ্রহণ করবেন?",
-        min_value=0.0,
-        max_value=max(0.0, current_due),
-        step=100.0,
-        value=0.0,
-        key="repay_amount",
+    ids = member_options(data)
+    selected = st.selectbox(
+        "সদস্য নির্বাচন করুন",
+        ids,
+        format_func=lambda x: member_label(x, data["members"][x]),
     )
+    member = data["members"][selected]
 
-    allocation_preview = ""
-    if repay > 0:
-        interest_part = min(repay, stored_interest + accrued)
-        principal_part = max(0.0, repay - interest_part)
-        principal_part = min(principal_part, principal)
-        allocation_preview = (
-            f"সুদের অংশ: {money(interest_part)} | "
-            f"মূলধন কমবে: {money(principal_part)}"
+    if outstanding_principal(member) > 0.009:
+        st.warning(
+            f"এই সদস্যের বর্তমান বকেয়া ঋণ {money(member.get('loan_principal', 0))}। "
+            "নতুন ঋণ দেওয়ার আগে বর্তমান ঋণ নিষ্পত্তি করুন।"
+        )
+        return
+
+    with st.form("loan_form"):
+        c1, c2 = st.columns(2)
+        with c1:
+            principal = st.number_input(
+                "ঋণের পরিমাণ",
+                min_value=1.0,
+                step=1000.0,
+                value=10000.0,
+            )
+        with c2:
+            annual_rate = st.number_input(
+                "বার্ষিক সুদের হার (%)",
+                min_value=0.0,
+                max_value=100.0,
+                step=0.5,
+                value=10.0,
+            )
+
+        c3, c4 = st.columns(2)
+        with c3:
+            duration = st.number_input(
+                "ঋণের মেয়াদ",
+                min_value=1,
+                max_value=1000,
+                step=1,
+                value=10,
+            )
+        with c4:
+            unit = st.selectbox("মেয়াদের ধরন", ["Days", "Weeks", "Months"], index=2)
+
+        loan_type = st.text_input("ঋণের ধরন", value="সাধারণ ঋণ")
+        loan_date = st.date_input("ঋণ প্রদানের তারিখ", value=date.today())
+
+        preview = st.form_submit_button("💸 ঋণ প্রদান ও Schedule তৈরি", use_container_width=True)
+
+    start_dt = datetime.combine(loan_date, datetime.min.time())
+
+    if preview:
+        schedule = calculate_schedule(
+            principal,
+            annual_rate,
+            duration,
+            unit,
+            start_dt,
         )
 
-    if allocation_preview:
-        st.info("📌 " + allocation_preview)
+        total_interest = sum(float(x["interest"]) for x in schedule)
+        total_payable = principal + total_interest
 
-    if st.button("✔️ কিস্তি / পরিশোধ গ্রহণ করুন", type="primary", use_container_width=True):
-        if repay <= 0:
-            st.warning("পরিশোধের পরিমাণ ০-এর বেশি হতে হবে।")
+        member["loan_principal"] = round(float(principal), 2)
+        member["loan_interest"] = round(total_interest, 2)
+        member["loan_type"] = loan_type.strip() or "সাধারণ ঋণ"
+        member["loan_date"] = start_dt.strftime("%Y-%m-%d %H:%M:%S")
+        member["loan_rate"] = float(annual_rate)
+        member["loan_duration"] = int(duration)
+        member["loan_duration_unit"] = unit
+        member["loan_status"] = "active"
+        member["loan_original_principal"] = round(float(principal), 2)
+        member["loan_original_interest"] = round(total_interest, 2)
+        member["loan_paid_principal"] = 0.0
+        member["loan_paid_interest"] = 0.0
+        member["loan_last_payment"] = start_dt.strftime("%Y-%m-%d %H:%M:%S")
+        member["loan_installment_count"] = 0
+        member["loan_total_installments"] = int(duration)
+        member["loan_schedule"] = schedule
+
+        add_history(
+            member,
+            f"ঋণ প্রদান: {money(principal)} | হার: {annual_rate:.2f}% বার্ষিক | "
+            f"মেয়াদ: {duration} {unit} | মোট নির্ধারিত সুদ: {money(total_interest)} | "
+            f"মোট পরিশোধযোগ্য: {money(total_payable)}",
+        )
+        save_and_rerun(data)
+
+    # Current loan summary
+    if outstanding_principal(member) > 0.009:
+        st.markdown("---")
+        st.subheader("📊 বর্তমান ঋণের তথ্য")
+
+        c1, c2, c3, c4 = st.columns(4)
+        c1.metric("মূল ঋণ", money(member.get("loan_original_principal", 0)))
+        c2.metric("বকেয়া মূলধন", money(member.get("loan_principal", 0)))
+        c3.metric("নির্ধারিত সুদ", money(member.get("loan_original_interest", 0)))
+        c4.metric("কিস্তি", f"{member.get('loan_total_installments', 0)}")
+
+        if member.get("loan_schedule"):
+            st.dataframe(
+                pd.DataFrame(member["loan_schedule"]),
+                use_container_width=True,
+                hide_index=True,
+            )
+
+
+# =========================================================
+# Page 5: Installment / loan collection
+# =========================================================
+def collection_page(data):
+    page_header(
+        "💳 ঋণের টাকা বা কিস্তি আদায়",
+        "Reducing balance অনুযায়ী payment নিন, আংশিক payment সমর্থিত",
+    )
+
+    active_ids = [
+        mid
+        for mid, m in data["members"].items()
+        if outstanding_principal(m) > 0.009
+    ]
+
+    if not active_ids:
+        st.info("কোনো চলমান ঋণ নেই।")
+        return
+
+    selected = st.selectbox(
+        "ঋণগ্রহীতা নির্বাচন করুন",
+        active_ids,
+        format_func=lambda x: member_label(x, data["members"][x]),
+    )
+    member = data["members"][selected]
+
+    principal_balance = outstanding_principal(member)
+    annual_rate = float(member.get("loan_rate", 0.0))
+    accrued = elapsed_interest(member)
+
+    c1, c2, c3 = st.columns(3)
+    c1.metric("বকেয়া মূলধন", money(principal_balance))
+    c2.metric("বার্ষিক হার", f"{annual_rate:.2f}%")
+    c3.metric("বর্তমান accrued interest", money(accrued))
+
+    st.markdown("### 🧾 কিস্তি / ঋণের টাকা আদায়")
+
+    with st.form("collection_form"):
+        amount = st.number_input(
+            "আদায়ের পরিমাণ",
+            min_value=0.01,
+            max_value=max(principal_balance + accrued, 0.01),
+            step=100.0,
+            value=min(
+                max(
+                    round(
+                        principal_balance
+                        / max(int(member.get("loan_total_installments", 1)), 1),
+                        2,
+                    ),
+                    1.0,
+                ),
+                max(principal_balance + accrued, 0.01),
+            ),
+        )
+        note = st.text_input("নোট (ঐচ্ছিক)")
+        submit = st.form_submit_button("💳 টাকা আদায় করুন", use_container_width=True)
+
+    if submit:
+        payment = float(amount)
+
+        # Current elapsed interest is charged first.
+        interest_due = elapsed_interest(member)
+        interest_paid = min(payment, interest_due)
+        principal_paid = min(max(payment - interest_paid, 0.0), principal_balance)
+
+        member["loan_interest"] = round(
+            max(float(member.get("loan_interest", 0)) - interest_paid, 0.0), 2
+        )
+        member["loan_principal"] = round(
+            max(principal_balance - principal_paid, 0.0), 2
+        )
+        member["loan_paid_interest"] = round(
+            float(member.get("loan_paid_interest", 0)) + interest_paid, 2
+        )
+        member["loan_paid_principal"] = round(
+            float(member.get("loan_paid_principal", 0)) + principal_paid, 2
+        )
+        member["loan_installment_count"] = int(
+            member.get("loan_installment_count", 0)
+        ) + 1
+        member["loan_last_payment"] = now_str()
+
+        # Keep schedule progress in sync.
+        mark_schedule_payment(member, payment)
+
+        if note.strip():
+            note_text = f" — {note.strip()}"
         else:
-            total_interest_due = stored_interest + accrued
-            interest_part = min(repay, total_interest_due)
-            principal_part = min(principal, max(0.0, repay - interest_part))
+            note_text = ""
 
-            info["loan_interest"] = max(0.0, total_interest_due - interest_part)
-            info["loan_principal"] = max(0.0, principal - principal_part)
-            info["loan_total_paid"] = safe_float(info.get("loan_total_paid", 0)) + repay
-            info["loan_total_interest_charged"] = safe_float(
-                info.get("loan_total_interest_charged", 0)
-            ) + interest_part
-            info["loan_last_payment_date"] = now_text()
+        add_history(
+            member,
+            f"ঋণ আদায়: {money(payment)} | মূলধন: {money(principal_paid)} | "
+            f"সুদ: {money(interest_paid)} | অবশিষ্ট মূলধন: "
+            f"{money(member['loan_principal'])}{note_text}",
+        )
 
-            if info["loan_principal"] <= 0.005 and info["loan_interest"] <= 0.005:
-                info["loan_principal"] = 0.0
-                info["loan_interest"] = 0.0
-                info["loan_status"] = "Closed"
-                message = f"ঋণ সম্পূর্ণ পরিশোধ: {money(repay)}। ঋণ বন্ধ হয়েছে।"
-            else:
-                info["loan_status"] = "Active"
-                message = (
-                    f"ঋণ/কিস্তি পরিশোধ: {money(repay)}; "
-                    f"সুদে সমন্বয় {money(interest_part)}, "
-                    f"মূলধনে সমন্বয় {money(principal_part)}।"
-                )
+        if outstanding_principal(member) <= 0.009:
+            member["loan_principal"] = 0.0
+            member["loan_interest"] = 0.0
+            member["loan_status"] = "closed"
+            member["loan_last_payment"] = now_str()
+            add_history(member, "ঋণ সম্পূর্ণ পরিশোধ হয়েছে।")
 
-            add_history(info, message)
-            save_data(data)
-            st.success("✅ পরিশোধ সফলভাবে হিসাবের সঙ্গে সমন্বয় হয়েছে।")
-            st.rerun()
+        save_and_rerun(data)
 
     st.markdown("---")
-    st.markdown("### ⚡ Early Settlement")
+    st.subheader("⚡ Early Settlement")
 
-    # Fair early settlement:
-    # charge only accrued interest up to today + outstanding principal;
-    # all future scheduled interest is waived.
-    future_interest_waived = max(
-        0.0,
-        safe_float(info.get("loan_expected_total", 0))
-        - safe_float(info.get("loan_total_paid", 0))
-        - principal
-        - stored_interest
-        - accrued,
-    )
-    early_amount = max(0.0, principal + stored_interest + accrued)
+    early_interest = elapsed_interest(member)
+    future_interest = remaining_scheduled_interest(member)
+    settlement_total = principal_balance + early_interest
 
     st.info(
-        f"আজ ঋণটি সম্পূর্ণ বন্ধ করলে আনুমানিক পরিশোধযোগ্য: "
-        f"**{money(early_amount)}**। "
-        f"ভবিষ্যতের আনুমানিক সুদ থেকে প্রায় **{money(future_interest_waived)}** "
-        f"মওকুফ হবে।"
+        f"আজ Early Settlement করলে আনুমানিক পরিশোধযোগ্য: **{money(settlement_total)}**। "
+        f"ভবিষ্যতের নির্ধারিত সুদ **{money(future_interest)}** আর নেওয়া হবে না।"
     )
 
     confirm = st.checkbox(
-        "আমি বুঝেছি যে Early Settlement করলে ভবিষ্যতের সুদ আর নেওয়া হবে না এবং ঋণটি সম্পূর্ণ বন্ধ হবে।",
-        key="early_confirm",
+        "আমি বুঝেছি যে Early Settlement করলে বর্তমান বকেয়া মূলধন + বাস্তবে অতিবাহিত সময়ের সুদ নেওয়া হবে এবং ভবিষ্যতের সুদ মওকুফ হবে।",
+        key=f"early_confirm_{selected}",
     )
 
-    if st.button("⚡ Early Settlement — ঋণ সম্পূর্ণ বন্ধ করুন", use_container_width=True):
-        if not confirm:
-            st.warning("আগে নিশ্চিতকরণ বক্সটি টিক দিন।")
-        else:
-            settlement = early_amount
-            waived = future_interest_waived
+    if st.button(
+        "⚡ Early Settlement করে ঋণ বন্ধ করুন",
+        use_container_width=True,
+        disabled=not confirm,
+    ):
+        member["loan_principal"] = 0.0
+        member["loan_interest"] = 0.0
+        member["loan_status"] = "closed"
+        member["loan_paid_principal"] = round(
+            float(member.get("loan_paid_principal", 0)) + principal_balance, 2
+        )
+        member["loan_paid_interest"] = round(
+            float(member.get("loan_paid_interest", 0)) + early_interest, 2
+        )
+        member["loan_last_payment"] = now_str()
 
-            info["loan_principal"] = 0.0
-            info["loan_interest"] = 0.0
-            info["loan_status"] = "Closed"
-            info["loan_total_paid"] = safe_float(info.get("loan_total_paid", 0)) + settlement
-            info["loan_total_interest_charged"] = safe_float(
-                info.get("loan_total_interest_charged", 0)
-            ) + stored_interest + accrued
-            info["loan_last_payment_date"] = now_text()
+        for row in member.get("loan_schedule", []):
+            if row.get("status") != "পরিশোধ":
+                row["status"] = "Early Settlement"
+                row["paid"] = round(float(row.get("paid", 0)) + 0.0, 2)
 
-            add_history(
-                info,
-                f"Early Settlement: {money(settlement)} গ্রহণ করে ঋণ সম্পূর্ণ বন্ধ। "
-                f"ভবিষ্যতের আনুমানিক সুদ ছাড়: {money(waived)}।"
-            )
-            save_data(data)
-            st.success(f"🎉 Early Settlement সম্পন্ন। {money(waived)} ভবিষ্যৎ সুদ মওকুফ করা হয়েছে।")
-            st.rerun()
+        add_history(
+            member,
+            f"Early Settlement: মোট আদায় {money(settlement_total)} | "
+            f"মূলধন {money(principal_balance)} | বাস্তব সময়ের সুদ {money(early_interest)} | "
+            f"ভবিষ্যৎ সুদ মওকুফ {money(future_interest)}",
+        )
+        add_history(member, "ঋণ Early Settlement-এর মাধ্যমে সম্পূর্ণ বন্ধ হয়েছে।")
+
+        save_and_rerun(data)
 
 
-# ============================================================
-# Page 6 — Statement
-# ============================================================
+# =========================================================
+# Page 6: Statement
+# =========================================================
 def statement_page(data):
-    page_header("📋 সদস্য স্টেটমেন্ট (Statement)", "সদস্যের সঞ্চয়, ঋণ এবং তারিখ-সময় সহ সম্পূর্ণ লেনদেন ইতিহাস")
+    page_header(
+        "📋 সদস্য স্টেটমেন্ট (Statement)",
+        "সদস্যের সঞ্চয়, ঋণ এবং সম্পূর্ণ transaction history দেখুন",
+    )
 
-    phone = member_select(data, "📞 স্টেটমেন্ট দেখতে সদস্য নির্বাচন করুন", key="statement_member")
-    if not phone:
+    if not data["members"]:
+        st.info("কোনো সদস্য নেই।")
         return
 
-    info = ensure_member_schema(data["members"][phone])
+    ids = member_options(data)
+    selected = st.selectbox(
+        "সদস্য নির্বাচন করুন",
+        ids,
+        format_func=lambda x: member_label(x, data["members"][x]),
+    )
+    member = data["members"][selected]
 
-    st.markdown(
-        f"""
-<div class="section-card">
-<h3 style="margin-top:0;color:#205c2a">👤 {info["name"]}</h3>
-📱 মোবাইল: <b>{phone}</b><br>
-💰 বর্তমান সঞ্চয়: <b>{money(info.get("savings", 0))}</b><br>
-📉 অবশিষ্ট ঋণ মূলধন: <b>{money(info.get("loan_principal", 0))}</b><br>
-📊 ঋণের অবস্থা: <b>{info.get("loan_status", "Closed")}</b>
-</div>
-""",
-        unsafe_allow_html=True,
+    c1, c2, c3 = st.columns(3)
+    c1.metric("সঞ্চয়", money(member.get("savings", 0)))
+    c2.metric("বকেয়া ঋণ", money(member.get("loan_principal", 0)))
+    c3.metric("বকেয়া সুদ", money(member.get("loan_interest", 0)))
+
+    st.markdown("### 👤 সদস্যের তথ্য")
+    info = {
+        "সদস্যের নাম": member.get("name", ""),
+        "মোবাইল": selected,
+        "ঋণের ধরন": member.get("loan_type", "নাই"),
+        "ঋণের হার": f"{float(member.get('loan_rate', 0)):.2f}%",
+        "মেয়াদ": f"{member.get('loan_duration', 0)} {member.get('loan_duration_unit', '')}",
+        "ঋণ শুরু": member.get("loan_date", "") or "নাই",
+        "ঋণের অবস্থা": member.get("loan_status", "closed"),
+        "মোট কিস্তি": member.get("loan_total_installments", 0),
+        "পরিশোধিত কিস্তি/লেনদেন": member.get("loan_installment_count", 0),
+    }
+    st.dataframe(
+        pd.DataFrame(list(info.items()), columns=["বিষয়", "তথ্য"]),
+        use_container_width=True,
+        hide_index=True,
     )
 
-    if loan_is_active(info):
-        accrued, elapsed = current_accrued_interest(info)
-        st.info(
-            f"চলতি ঋণ: মূলধন {money(info.get('loan_principal', 0))} | "
-            f"বর্তমান accrued interest {money(accrued)} | "
-            f"শেষ লেনদেন থেকে {elapsed} দিন।"
+    if member.get("loan_schedule"):
+        st.markdown("### 📅 কিস্তির Schedule")
+        st.dataframe(
+            pd.DataFrame(member["loan_schedule"]),
+            use_container_width=True,
+            hide_index=True,
         )
 
-    st.markdown("### 📜 লেনদেনের ইতিহাস")
+    st.markdown("### 🕐 সম্পূর্ণ Transaction History")
 
-    history = info.get("history", [])
-    if not history:
-        st.info("এই সদস্যের কোনো লেনদেনের ইতিহাস নেই।")
+    history = member.get("history", [])
+    if history:
+        history_df = pd.DataFrame(
+            [{"তারিখ ও সময়": item[:19], "লেনদেন": item[22:] if len(item) > 22 else item} for item in history]
+        )
+        st.dataframe(
+            history_df,
+            use_container_width=True,
+            hide_index=True,
+        )
+
+        csv_bytes = history_df.to_csv(index=False).encode("utf-8-sig")
+        st.download_button(
+            "📥 Statement CSV ডাউনলোড",
+            data=csv_bytes,
+            file_name=f"statement_{selected}.csv",
+            mime="text/csv",
+            use_container_width=True,
+        )
     else:
-        for idx, log in enumerate(reversed(history), 1):
-            st.markdown(
-                f"""
-<div class="member-card">
-<b>{idx}.</b> {log}
-</div>
-""",
-                unsafe_allow_html=True,
-            )
-
-    # Downloadable statement
-    statement_text = (
-        f"আমার সমিতি — সদস্য স্টেটমেন্ট\n"
-        f"নাম: {info['name']}\n"
-        f"মোবাইল: {phone}\n"
-        f"সঞ্চয়: {money(info.get('savings', 0))}\n"
-        f"অবশিষ্ট ঋণ: {money(info.get('loan_principal', 0))}\n"
-        f"ঋণের অবস্থা: {info.get('loan_status', 'Closed')}\n\n"
-        f"লেনদেনের ইতিহাস:\n" + "\n".join(history)
-    )
-
-    st.download_button(
-        "📥 স্টেটমেন্ট ডাউনলোড করুন",
-        data=statement_text.encode("utf-8"),
-        file_name=f"statement_{phone}.txt",
-        mime="text/plain",
-        use_container_width=True,
-    )
+        st.info("এই সদস্যের কোনো history নেই।")
 
 
-# ============================================================
-# Main application
-# ============================================================
-if not st.session_state.logged_in:
-    login_page()
-else:
-    data = load_data()
+# =========================================================
+# Main app
+# =========================================================
+def main():
+    apply_css()
 
-    sidebar()
+    if "logged_in" not in st.session_state:
+        st.session_state["logged_in"] = False
 
-    # Exact menu names intentionally match these conditions.
-    if st.session_state.page == "ড্যাশবোর্ড ও সদস্য তালিকা":
+    if not st.session_state["logged_in"]:
+        login_page()
+        return
+
+    data = normalize_data(load_data())
+
+    with st.sidebar:
+        st.markdown(
+            """
+            <div style="text-align:center;padding:12px 0 18px 0;">
+                <div style="font-size:38px;">🌿</div>
+                <div style="font-size:24px;font-weight:900;color:#17652b;">
+                    আমার সমিতি
+                </div>
+                <div style="font-size:12px;color:#6b786e;">
+                    Micro-Finance Management
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+        page = st.radio(
+            "মেনু",
+            MENU,
+            index=0,
+            key="main_menu",
+        )
+
+        st.markdown("---")
+
+        if st.button("🚪 Logout", use_container_width=True):
+            st.session_state["logged_in"] = False
+            st.rerun()
+
+        st.caption("© 2026 আমার সমিতি")
+
+    # IMPORTANT:
+    # Sidebar menu text and conditions are EXACTLY the same.
+    if page == "🏠 ড্যাশবোর্ড":
         dashboard_page(data)
 
-    elif st.session_state.page == "নতুন সদস্য যুক্ত করুন":
-        new_member_page(data)
+    elif page == "👥 সদস্য ব্যবস্থাপনা":
+        member_management_page(data)
 
-    elif st.session_state.page == "কিস্তি বা টাকা জমা নিন":
+    elif page == "💰 সঞ্চয় জমা":
         savings_page(data)
 
-    elif st.session_state.page == "ঋণ বা লোন বিতরণ (Loan)":
+    elif page == "💸 ঋণ প্রদান":
         loan_page(data)
 
-    elif st.session_state.page == "ঋণের টাকা বা কিস্তি আদায়":
-        loan_collection_page(data)
+    elif page == "💳 ঋণের টাকা বা কিস্তি আদায়":
+        collection_page(data)
 
-    elif st.session_state.page == "সদস্য স্টেটমেন্ট (Statement)":
+    elif page == "📋 সদস্য স্টেটমেন্ট (Statement)":
         statement_page(data)
+
+
+if __name__ == "__main__":
+    main()
